@@ -1,6 +1,8 @@
 package com.example.qmx.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.qmx.domain.*;
+import com.example.qmx.mapper.*;
 import com.example.qmx.server.*;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,9 +24,21 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class MainController {
 
     private final List<SseEmitter> alarmEmitters = new CopyOnWriteArrayList<>();
+    @Autowired
     private DataServer dataServer;
+    @Autowired
     private DataToObj dataToObj;
-    
+    @Autowired
+    private DeviceStatusMapper deviceStatusMapper;
+    @Autowired
+    private ProductHourlyMapper productHourlyMapper;
+    @Autowired
+    private ProductWeekMapper productWeekMapper;
+    @Autowired
+    private SensorMapper sensorMapper;
+    @Autowired
+    private SprayRecordMapper sprayRecordMapper;
+
     @Autowired
     public MainController(DataServer dataServer, DataToObj dataToObj) {
         this.dataServer = dataServer;
@@ -32,6 +46,7 @@ public class MainController {
     }
 
     @GetMapping(value = "/getAlarmStream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @ApiOperation(value = "获取报警", notes = "返回实时报警")
     public SseEmitter getAlarmStream() {
         SseEmitter emitter = new SseEmitter(0L); // 不设置超时
         alarmEmitters.add(emitter);
@@ -50,6 +65,30 @@ public class MainController {
         } catch (IOException ignored) {}
 
         return emitter;
+    }
+
+    @GetMapping(value = "/getLatestStatus")
+    @ApiOperation(value = "获取设备状态", notes = "返回对应设备的最新状态")
+    public DeviceStatus getLatestStatus(String devName) {
+        return deviceStatusMapper.getLatestStatus(devName);
+    }
+
+    @GetMapping(value = "/getLatestProductHourly")
+    @ApiOperation(value = "获取产品小时记录", notes = "返回最新产品小时记录")
+    public ProductHourly getLatestProductHourly() {
+        return productHourlyMapper.getLatestProductHourly();
+    }
+
+    @GetMapping(value = "/getLatestProductWeek")
+    @ApiOperation(value = "获取产品周记录", notes = "返回对应设备的最新产品周记录")
+    public ProductWeek getLatestProductWeek() {
+        return productWeekMapper.getLatestProductWeek();
+    }
+
+    @GetMapping(value = "/getLatestSensor")
+    @ApiOperation(value = "获取传感器记录", notes = "返回对应设备的最新传感器记录")
+    public Sensor getLatestSensor(String devName) {
+        return sensorMapper.getLatestSensor(devName);
     }
 
     public void publishAlarm(Map<String, Object> alarm) {
