@@ -52,9 +52,6 @@ public class MainController {
         return emitter;
     }
 
-
-
-
     public void publishAlarm(Map<String, Object> alarm) {
         if (alarm == null || alarm.isEmpty()) return;
 
