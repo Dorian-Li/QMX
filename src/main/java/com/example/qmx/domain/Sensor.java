@@ -19,7 +19,7 @@ public class Sensor {
     private String devName;
 
     @TableField("value")
-    private Double value;
+    private Float value;
 
     @TableField("time")
     private Date time;

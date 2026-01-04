@@ -119,4 +119,91 @@ public class MainController {
         return resp;
     }
 
+
+    // 类型安全段的请求体（typeId 固定：0x07-bool、0x08-int、0x09-real）
+    public static class TypedSegmentDto {
+        public Integer typeId;
+        public List<Object> values;
+    }
+
+    public static class TypedFrameRequest {
+        public Integer unitId;
+        public Integer functionCode;
+        public Integer startAddress; // 新增：起始地址
+        public java.util.List<TypedSegmentDto> segments;
+    }
+
+    @PostMapping("/sendConfigData")
+    @ApiOperation(value = "按类型标识组帧下发", notes = "0x07-bool、0x08-int16、0x09-real32，按解析格式组帧下发")
+    public java.util.Map<String, Object> sendCustomFrameTyped(@RequestBody TypedFrameRequest req) throws Exception {
+        java.util.Map<String, Object> resp = new java.util.HashMap<>();
+        if (req == null || req.unitId == null || req.functionCode == null || req.startAddress == null || req.segments == null || req.segments.isEmpty()) {
+            resp.put("ok", false);
+            resp.put("msg", "参数不完整：需要 unitId、functionCode、startAddress、segments");
+            return resp;
+        }
+        if (!dataServer.isGatewayConnected()) {
+            resp.put("ok", false);
+            resp.put("msg", "网关未连接，无法下发配置");
+            return resp;
+        }
+
+        java.util.List<com.example.qmx.server.DataResponse.TypedSegment> segs = new java.util.ArrayList<>();
+        for (TypedSegmentDto dto : req.segments) {
+            if (dto == null || dto.typeId == null) {
+                resp.put("ok", false);
+                resp.put("msg", "segments 中存在空项或缺少 typeId");
+                return resp;
+            }
+            int tid = dto.typeId;
+            if (tid == 0x07) {
+                java.util.List<Boolean> vals = new java.util.ArrayList<>();
+                for (Object o : dto.values) {
+                    if (o instanceof Boolean) vals.add((Boolean) o);
+                    else if (o instanceof Number) vals.add(((Number) o).intValue() != 0);
+                    else if (o instanceof String) vals.add(!"0".equals(o));
+                    else vals.add(Boolean.FALSE);
+                }
+                segs.add(com.example.qmx.server.DataResponse.TypedSegment.ofBools(vals));
+            } else if (tid == 0x08) {
+                java.util.List<Integer> vals = new java.util.ArrayList<>();
+                for (Object o : dto.values) {
+                    vals.add(o == null ? 0 : Integer.parseInt(String.valueOf(o)));
+                }
+                segs.add(com.example.qmx.server.DataResponse.TypedSegment.ofInt16(vals));
+            } else if (tid == 0x09) {
+                java.util.List<Double> vals = new java.util.ArrayList<>();
+                for (Object o : dto.values) {
+                    vals.add(o == null ? 0.0 : Double.parseDouble(String.valueOf(o)));
+                }
+                segs.add(com.example.qmx.server.DataResponse.TypedSegment.ofReal32(vals));
+            } else {
+                resp.put("ok", false);
+                resp.put("msg", "不支持的 typeId: " + tid + "（仅支持 0x07/0x08/0x09）");
+                return resp;
+            }
+        }
+
+        boolean ok = dataServer.sendTypedSegments(req.unitId, req.functionCode, req.startAddress, segs);
+        resp.put("ok", ok);
+        resp.put("msg", ok ? "发送成功" : "发送失败");
+        return resp;
+    }
+
+    // 模拟网关连接
+    @PostMapping("/listen")
+    public java.util.Map<String, Object> startGatewayListen() {
+        java.util.Map<String, Object> resp = new java.util.HashMap<>();
+        new Thread(() -> {
+            try {
+                // 启动服务端监听并阻塞直到有客户端接入
+                dataServer.fetchData();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }, "gateway-listen-thread").start();
+        resp.put("ok", true);
+        resp.put("msg", "已启动网关监听（等待客户端接入）");
+        return resp;
+    }
 }

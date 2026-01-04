@@ -185,11 +185,11 @@ public class DataToObj {
                     int need = count * 4;
                     if (offset + need > end) { offset = end; break; }
                     for (int i = 0; i < count; i++) {
-                        long v = ((long)(pdu[offset] & 0xFF) << 24)
-                               | ((long)(pdu[offset + 1] & 0xFF) << 16)
-                               | ((long)(pdu[offset + 2] & 0xFF) << 8)
-                               | ((long)(pdu[offset + 3] & 0xFF));
-                        values.add(v);
+                        int bits = ((pdu[offset] & 0xFF) << 24)
+                                 | ((pdu[offset + 1] & 0xFF) << 16)
+                                 | ((pdu[offset + 2] & 0xFF) << 8)
+                                 | (pdu[offset + 3] & 0xFF);
+                        values.add((long) bits); // 保存浮点的原始位模式
                         offset += 4;
                     }
                     break;
@@ -281,9 +281,12 @@ public class DataToObj {
                 "涂料桶1液位", "涂料桶2液位", "喷涂管路1压力", "喷涂管路2压力", "喷涂机1压力", "喷涂机2压力", "上料管路实时压力"
         };
         for (int idx = 0; idx < sensors.size(); idx++) {
-            double value = sensors.get(idx);
-            String devName = idx < sensorDevNames.length ? sensorDevNames[idx] : ("传感器" + (idx + 1));
+            long rawBits = sensors.get(idx);
+            float f = Float.intBitsToFloat((int) rawBits); // 按 REAL32 还原
+            float value = f; // 与实体的 Float 类型兼容
 
+            String devName = idx < sensorDevNames.length ? sensorDevNames[idx] : ("传感器" + (idx + 1));
+        
             Sensor s = new Sensor();
             s.setDevName(devName);
             s.setValue(value);

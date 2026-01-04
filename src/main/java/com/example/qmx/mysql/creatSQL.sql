@@ -81,17 +81,17 @@ create table if not exists device_status(
     time      datetime default current_timestamp not null comment '采集时间'
 ) engine=InnoDB default charset=utf8mb4 comment='0x01 设备状态';
 
-create index idx_device_status_dev_time on device_status(devName, time);
+# create index idx_device_status_dev_time on device_status(devName, time);
 
 -- 0x02 传感器
 create table if not exists sensor(
     id           bigint primary key auto_increment,
     devName      varchar(64)                     not null comment '设备名',
-    value        double                          null     comment '指标值',
+    value        float                          null     comment '指标值',
     time         datetime default current_timestamp not null comment '采集时间'
 ) engine=InnoDB default charset=utf8mb4 comment='0x02 实时传感器（KV）';
 
-create index idx_sensor_dev_time on sensor(devName, time);
+# create index idx_sensor_dev_time on sensor(devName, time);
 
 -- 0x03 喷涂情况
 create table if not exists spray_record (
@@ -102,7 +102,7 @@ create table if not exists spray_record (
     time         datetime default current_timestamp not null comment '采集时间'
 ) engine=InnoDB default charset=utf8mb4 comment='0x03 喷涂记录';
 
-create index idx_spray_record_dev_time on spray_record(devName, time);
+# create index idx_spray_record_dev_time on spray_record(devName, time);
 
 -- 0x04 喷涂产量（小时）
 create table if not exists product_hourly(
