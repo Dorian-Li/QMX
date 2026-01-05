@@ -46,7 +46,7 @@ public class DataResponse {
         respPdu[2] = incomingPdu[2];
         Arrays.fill(respPdu, 3, respPdu.length, (byte) 0xAA);
 
-        // 构造响应 MBAP：沿用 transactionId/protocolId/unitId，length=respPdu.length+4
+        // 构造响应 MBAP：沿用 transactionId/protocolId/unitId，length=unitId(1) + PDU长度
         byte[] respMbap = new byte[7];
         // transactionId
         respMbap[0] = incomingMbap[0];
@@ -54,8 +54,8 @@ public class DataResponse {
         // protocolId
         respMbap[2] = incomingMbap[2];
         respMbap[3] = incomingMbap[3];
-        // length (PDU长度+4)
-        int mbapLen = respPdu.length + 4;
+        // length (unitId + PDU长度)
+        int mbapLen = respPdu.length + 1;
         respMbap[4] = (byte) ((mbapLen >> 8) & 0xFF);
         respMbap[5] = (byte) (mbapLen & 0xFF);
         // unitId
@@ -68,18 +68,68 @@ public class DataResponse {
         return frame;
     }
 
+    // 构造“错误帧”：功能码原样，数据长度=2，数据内容=0xFFFF（表示 -1）
+    private byte[] buildErrorResponseFrame(byte[] incomingMbap, byte[] incomingPdu) {
+        byte functionCode = incomingPdu[0];
+
+        // PDU: [func][len_hi=0x00][len_lo=0x02][0xFF][0xFF]
+        byte[] respPdu = new byte[1 + 2 + 2];
+        respPdu[0] = functionCode;
+        respPdu[1] = 0x00;
+        respPdu[2] = 0x02;
+        respPdu[3] = (byte) 0xFF;
+        respPdu[4] = (byte) 0xFF;
+
+        // MBAP: 复用 transactionId/protocolId/unitId，length = unitId(1) + PDU长度
+        byte[] respMbap = new byte[7];
+        respMbap[0] = incomingMbap[0];
+        respMbap[1] = incomingMbap[1];
+        respMbap[2] = incomingMbap[2];
+        respMbap[3] = incomingMbap[3];
+        int mbapLen = respPdu.length + 1;
+        respMbap[4] = (byte) ((mbapLen >> 8) & 0xFF);
+        respMbap[5] = (byte) (mbapLen & 0xFF);
+        respMbap[6] = incomingMbap[6];
+
+        byte[] frame = new byte[respMbap.length + respPdu.length];
+        System.arraycopy(respMbap, 0, frame, 0, respMbap.length);
+        System.arraycopy(respPdu, 0, frame, respMbap.length, respPdu.length);
+        return frame;
+    }
+
     /**
      * 发送响应帧到网关（使用 Socket）
      */
-    public void sendResponse(Socket socket, byte[] incomingMbap, byte[] incomingPdu) throws IOException {
+    public int sendResponse(Socket socket, byte[] incomingMbap, byte[] incomingPdu) throws IOException {
         if (socket == null || socket.isClosed()) {
             throw new IOException("Socket 不可用或已关闭，无法发送响应");
         }
-        byte[] frame = buildResponseFrame(incomingMbap, incomingPdu);
+        if (incomingMbap == null || incomingMbap.length != 7) {
+            throw new IllegalArgumentException("MBAP 头不能为空且长度必须为 7 字节");
+        }
+        if (incomingPdu == null || incomingPdu.length < 3) {
+            throw new IllegalArgumentException("PDU 不能为空且长度至少为 3 字节（功能码+数据长度2字节）");
+        }
+
+        int dataLen = ((incomingPdu[1] & 0xFF) << 8) | (incomingPdu[2] & 0xFF);
+        int expectedPduLen = 1 + 2 + dataLen;
+
         OutputStream os = socket.getOutputStream();
+        if (incomingPdu.length != expectedPduLen) {
+            // 长度不一致，发送表示 -1 的错误帧
+            byte[] errorFrame = buildErrorResponseFrame(incomingMbap, incomingPdu);
+            os.write(errorFrame);
+            os.flush();
+            log.warn("PDU 长度不一致，已向网关发送错误帧（数据=-1），长度={} 字节", errorFrame.length);
+            return -1;
+        }
+
+        // 长度一致，发送正常确认帧
+        byte[] frame = buildResponseFrame(incomingMbap, incomingPdu);
         os.write(frame);
         os.flush();
-        log.info("已向网关发送确认帧，长度={} 字节", frame.length);
+        log.info("PDU 长度一致，已向网关发送确认帧，长度={} 字节，数据长度={}", frame.length, dataLen);
+        return dataLen;
     }
 
     /**
