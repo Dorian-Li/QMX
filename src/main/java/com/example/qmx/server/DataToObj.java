@@ -44,7 +44,10 @@ public class DataToObj {
     private ProductWeekMapper productWeekMapper;
 
     @Autowired
-    private DataResponse dataResponse; // 新增：注入响应帧构造/发送服务
+    private DataResponse dataResponse;
+
+    @Autowired
+    private QualityDetectionMapper qualityDetectionMapper;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired(required = false)
@@ -346,7 +349,7 @@ public class DataToObj {
     }
 
     private void fetchZLJCFromApi() {
-        String ZLJC_URL = "http://";
+        String ZLJC_URL = "http://127.0.0.1:8000/latest";
         HttpURLConnection conn = null;
         try {
             if (ZLJC_URL == null || ZLJC_URL.isEmpty()) {
@@ -382,31 +385,22 @@ public class DataToObj {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode json = mapper.readTree(sb.toString());
 
-            // 必须存在 rate，否则抛异常
-            JsonNode rateNode = json.get("rate");
-            if (rateNode == null || rateNode.isNull() || !rateNode.isNumber()) {
-                throw new IllegalStateException("质量检测API未返回有效的 rate 字段");
+            // 只读取 result
+            JsonNode resultNode = json.get("result");
+            if (resultNode == null || resultNode.isNull() || !resultNode.isNumber()) {
+                throw new IllegalStateException("质量检测API未返回有效的 result 字段");
             }
-            double rate = rateNode.asDouble();
+            int result = resultNode.asInt();
 
-            // 可选：设备/阶段信息（若接口未提供则置空）
-            String devName = json.path("devName").isMissingNode() ? null : json.get("devName").asText();
-            Integer stage  = json.path("stage").isMissingNode() ? null : json.get("stage").asInt();
+            com.example.qmx.domain.QualityDetection qd = new com.example.qmx.domain.QualityDetection();
+            qd.setResult(result);
+            qd.setTime(new Date());
 
-            // 写入 spray_record 表
-            SprayRecord sr = new SprayRecord();
-            sr.setDevName(devName);         // creatSQL.sql 中 devName 可为 NULL
-            if (stage != null) {
-                sr.setStage(stage);         // 如果表无该列，请将 domain 的 stage 标记 exist=false 或移除
-            }
-            sr.setRate(rate);
-            sr.setTime(new Date());
-
-            int n = sprayRecordMapper.insert(sr);
+            int n = qualityDetectionMapper.insert(qd);
             if (n > 0) {
-                System.out.println("spray_record 插入成功: devName=" + devName + ", rate=" + rate + (stage != null ? (", stage=" + stage) : ""));
+                System.out.println("quality_result 插入成功: result=" + result);
             } else {
-                System.out.println("spray_record 插入失败: devName=" + devName + ", rate=" + rate + (stage != null ? (", stage=" + stage) : ""));
+                System.out.println("quality_result 插入失败: result=" + result);
             }
         } catch (Exception e) {
             System.err.println("质量检测API读取异常：" + e.getMessage());

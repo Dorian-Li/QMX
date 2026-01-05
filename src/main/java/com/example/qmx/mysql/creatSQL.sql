@@ -145,3 +145,9 @@ create table if not exists product_week(
 -- create index idx_motion_param_dev_key_time on motion_param_06(devName, param_key, time);
 -- create index idx_motion_param_batch        on motion_param_06(batch_id);
 
+-- 质量检测结果
+create table if not exists quality_result (
+    id         bigint primary key auto_increment,
+    result     int                             not null comment '检测结果：0/1',
+    time       datetime default current_timestamp not null comment '采集时间'
+) engine=InnoDB default charset=utf8mb4 comment='质量检测结果';
