@@ -132,6 +132,8 @@ public class DataResponse {
         return dataLen;
     }
 
+// ==========================================================================
+
     /**
      * 构造 Modbus TCP 写多个保持寄存器（功能码 0x10）完整帧
      */
@@ -202,101 +204,233 @@ public class DataResponse {
         return frame;
     }
 
-    // 类型安全的段：根据数据类型自动打包 payload，并设置 count（0x07=bool，0x08=int16，0x09=real32）
-    public static class TypedSegment {
-        public final int typeId;   // 1B
-        public final int count;    // 1B（bool=位数；int=元素数；real=元素数）
-        public final byte[] payload;
+// ================================== 定长 ====================================
 
-        private TypedSegment(int typeId, int count, byte[] payload) {
-            this.typeId = typeId & 0xFF;
-            this.count = count & 0xFF;
-            this.payload = payload == null ? new byte[0] : payload;
+     // 类型安全的段：根据数据类型自动打包 payload，并设置 count（0x07=bool，0x08=int16，0x09=real32）
+     public static class TypedSegment {
+         public final int typeId;   // 1B
+         public final int count;    // 1B（bool=位数；int=元素数；real=元素数）
+         public final byte[] payload;
+
+         private TypedSegment(int typeId, int count, byte[] payload) {
+             this.typeId = typeId & 0xFF;
+             this.count = count & 0xFF;
+             this.payload = payload == null ? new byte[0] : payload;
+         }
+
+         // 0x07：bool（1bit，低位优先；与解析中的 (byte >> bitIndex) & 0x01 一致）
+         public static TypedSegment ofBools(List<Boolean> values) {
+             if (values == null) values = Collections.emptyList();
+             int count = values.size();
+             int bytes = (count + 7) / 8;
+             byte[] payload = new byte[bytes];
+             for (int i = 0; i < count; i++) {
+                 boolean v = Boolean.TRUE.equals(values.get(i));
+                 int bIndex = i / 8;
+                 int bitIndex = i % 8; // 低位开始
+                 if (v) payload[bIndex] |= (byte) (1 << bitIndex);
+             }
+             return new TypedSegment(0x07, count, payload);
+         }
+
+         // 0x08：int（16bit，大端）
+         public static TypedSegment ofInt16(List<Integer> values) {
+             if (values == null) values = Collections.emptyList();
+             int count = values.size();
+             byte[] payload = new byte[count * 2];
+             int p = 0;
+             for (int v : values) {
+                 payload[p++] = (byte) ((v >> 8) & 0xFF);
+                 payload[p++] = (byte) (v & 0xFF);
+             }
+             return new TypedSegment(0x08, count, payload);
+         }
+
+         // 0x09：real（32bit IEEE-754，大端）
+         public static TypedSegment ofReal32(List<Double> values) {
+             if (values == null) values = Collections.emptyList();
+             int count = values.size();
+             byte[] payload = new byte[count * 4];
+             int p = 0;
+             for (double d : values) {
+                 int bits = Float.floatToIntBits((float) d);
+                 payload[p++] = (byte) ((bits >> 24) & 0xFF);
+                 payload[p++] = (byte) ((bits >> 16) & 0xFF);
+                 payload[p++] = (byte) ((bits >> 8) & 0xFF);
+                 payload[p++] = (byte) (bits & 0xFF);
+             }
+             return new TypedSegment(0x09, count, payload);
+         }
+     }
+
+     // 新增：构造自定义数据帧
+     public byte[] buildCustomDataFrameTyped(int unitId, int functionCode, int startAddress, int transactionId, List<TypedSegment> segments) {
+         if (segments == null) segments = java.util.Collections.emptyList();
+
+         // 计算数据内容 N 字节长度（各段：typeId(1) + count(1) + payload）
+         int dataLen = 0;
+         for (TypedSegment seg : segments) {
+             dataLen += 2 + (seg.payload == null ? 0 : seg.payload.length);
+         }
+         if (dataLen > 512) {
+             throw new IllegalArgumentException("数据长度超过上限 512 字节，当前=" + dataLen);
+         }
+
+         // PDU: [functionCode][startAddress 2B][dataLen 2B][segments...]
+         byte[] pdu = new byte[1 + 2 + 2 + dataLen];
+         int p = 0;
+         pdu[p++] = (byte) (functionCode & 0xFF);
+         pdu[p++] = (byte) ((startAddress >>> 8) & 0xFF);
+         pdu[p++] = (byte) (startAddress & 0xFF);
+         pdu[p++] = (byte) ((dataLen >>> 8) & 0xFF);
+         pdu[p++] = (byte) (dataLen & 0xFF);
+         for (TypedSegment seg : segments) {
+             pdu[p++] = (byte) (seg.typeId & 0xFF);
+             pdu[p++] = (byte) (seg.count & 0xFF);
+             if (seg.payload != null && seg.payload.length > 0) {
+                 System.arraycopy(seg.payload, 0, pdu, p, seg.payload.length);
+                 p += seg.payload.length;
+             }
+         }
+
+         // MBAP: [事务ID2][协议ID2=0][长度2=N+6][unitId 1B]
+         byte[] mbap = new byte[7];
+         mbap[0] = (byte) ((transactionId >>> 8) & 0xFF);
+         mbap[1] = (byte) (transactionId & 0xFF);
+         mbap[2] = 0x00;
+         mbap[3] = 0x00;
+         int mbapLen = pdu.length + 1; // N + 6（unitId 1B + PDU 1+2+2+N）
+         mbap[4] = (byte) ((mbapLen >>> 8) & 0xFF);
+         mbap[5] = (byte) (mbapLen & 0xFF);
+         mbap[6] = (byte) (unitId & 0xFF);
+
+         byte[] frame = new byte[mbap.length + pdu.length];
+         System.arraycopy(mbap, 0, frame, 0, mbap.length);
+         System.arraycopy(pdu, 0, frame, mbap.length, pdu.length);
+         return frame;
+     }
+
+     /**
+      * 发送自定义数据帧（Typed 段版）
+      */
+     public void sendCustomDataFrameTyped(Socket socket, int unitId, int functionCode, int startAddress, int transactionId, java.util.List<TypedSegment> segments) throws java.io.IOException {
+         byte[] frame = buildCustomDataFrameTyped(unitId, functionCode, startAddress, transactionId, segments);
+         java.io.OutputStream out = socket.getOutputStream();
+         out.write(frame);
+         out.flush();
+         log.info("已发送自定义数据帧（Typed）：len={}，func=0x{}，startAddr=0x{}", frame.length, Integer.toHexString(functionCode), Integer.toHexString(startAddress));
+     }
+
+
+// ================================== 不定长 ====================================
+
+    /**
+     * 配置项（新 PDU，无类型标识）：数据标识(1B) + 具体数据
+     * 数据标识与数据长度：
+     *  - 0x01-0x05: char -> 1 字节
+     *  - 0x06:      int16 -> 2 字节 (大端)
+     *  - 0x07-0x13: real32 -> 4 字节 (IEEE-754 float, 大端)
+     */
+    public static class ConfigItem {
+        public final int dataId;   // 0x01..0x13
+        public final byte[] value; // 已编码数据（长度由 dataId 决定）
+
+        private ConfigItem(int dataId, byte[] value) {
+            if (dataId < 0x01 || dataId > 0x13) {
+                throw new IllegalArgumentException("数据标识不合法，必须为 0x01-0x13，当前=0x" + Integer.toHexString(dataId));
+            }
+            if (value == null) {
+                throw new IllegalArgumentException("具体数据不能为空");
+            }
+            int expectedLen;
+            if (dataId >= 0x01 && dataId <= 0x05) {
+                expectedLen = 1;
+            } else if (dataId == 0x06) {
+                expectedLen = 2;
+            } else {
+                expectedLen = 4; // 0x07..0x13
+            }
+            if (value.length != expectedLen) {
+                throw new IllegalArgumentException("数据标识 0x" + Integer.toHexString(dataId) +
+                        " 的数据长度必须为 " + expectedLen + " 字节，当前=" + value.length);
+            }
+            this.dataId = dataId & 0xFF;
+            this.value = value;
         }
 
-        // 0x07：bool（1bit，低位优先；与解析中的 (byte >> bitIndex) & 0x01 一致）
-        public static TypedSegment ofBools(List<Boolean> values) {
-            if (values == null) values = Collections.emptyList();
-            int count = values.size();
-            int bytes = (count + 7) / 8;
-            byte[] payload = new byte[bytes];
-            for (int i = 0; i < count; i++) {
-                boolean v = Boolean.TRUE.equals(values.get(i));
-                int bIndex = i / 8;
-                int bitIndex = i % 8; // 低位开始
-                if (v) payload[bIndex] |= (byte) (1 << bitIndex);
+        public static ConfigItem ofChar(int dataId, int byteValue) {
+            if (dataId < 0x01 || dataId > 0x05) {
+                throw new IllegalArgumentException("char(单字节) 的数据标识必须在 0x01-0x05 范围内");
             }
-            return new TypedSegment(0x07, count, payload);
+            if (byteValue < 0x00 || byteValue > 0xFF) {
+                throw new IllegalArgumentException("char(单字节) 的取值必须在 0x00-0xFF 范围内");
+            }
+            byte[] payload = new byte[]{ (byte) (byteValue & 0xFF) };
+            return new ConfigItem(dataId, payload);
         }
 
-        // 0x08：int（16bit，大端）
-        public static TypedSegment ofInt16(List<Integer> values) {
-            if (values == null) values = Collections.emptyList();
-            int count = values.size();
-            byte[] payload = new byte[count * 2];
-            int p = 0;
-            for (int v : values) {
-                payload[p++] = (byte) ((v >> 8) & 0xFF);
-                payload[p++] = (byte) (v & 0xFF);
+        public static ConfigItem ofInt(int dataId, int v) {
+            if (dataId != 0x06) {
+                throw new IllegalArgumentException("int16 的数据标识必须为 0x06");
             }
-            return new TypedSegment(0x08, count, payload);
+            byte[] payload = new byte[2];
+            payload[0] = (byte) ((v >> 8) & 0xFF);
+            payload[1] = (byte) (v & 0xFF);
+            return new ConfigItem(dataId, payload);
         }
 
-        // 0x09：real（32bit IEEE-754，大端）
-        public static TypedSegment ofReal32(List<Double> values) {
-            if (values == null) values = Collections.emptyList();
-            int count = values.size();
-            byte[] payload = new byte[count * 4];
-            int p = 0;
-            for (double d : values) {
-                int bits = Float.floatToIntBits((float) d);
-                payload[p++] = (byte) ((bits >> 24) & 0xFF);
-                payload[p++] = (byte) ((bits >> 16) & 0xFF);
-                payload[p++] = (byte) ((bits >> 8) & 0xFF);
-                payload[p++] = (byte) (bits & 0xFF);
+        public static ConfigItem ofReal(int dataId, double d) {
+            if (dataId < 0x07 || dataId > 0x13) {
+                throw new IllegalArgumentException("real32 的数据标识必须在 0x07-0x13 范围内");
             }
-            return new TypedSegment(0x09, count, payload);
+            int bits = Float.floatToIntBits((float) d);
+            byte[] payload = new byte[4];
+            payload[0] = (byte) ((bits >> 24) & 0xFF);
+            payload[1] = (byte) ((bits >> 16) & 0xFF);
+            payload[2] = (byte) ((bits >> 8) & 0xFF);
+            payload[3] = (byte) (bits & 0xFF);
+            return new ConfigItem(dataId, payload);
         }
     }
-
-    // 新增：构造自定义数据帧
-    public byte[] buildCustomDataFrameTyped(int unitId, int functionCode, int startAddress, int transactionId, List<TypedSegment> segments) {
-        if (segments == null) segments = java.util.Collections.emptyList();
-
-        // 计算数据内容 N 字节长度（各段：typeId(1) + count(1) + payload）
-        int dataLen = 0;
-        for (TypedSegment seg : segments) {
-            dataLen += 2 + (seg.payload == null ? 0 : seg.payload.length);
+    
+    /**
+     * 构造“前端参数配置下发”完整帧
+     * PDU: [functionCode 1B][dataCount 1B][items...]
+     * item: [dataId 1B][value N(B)]
+     * MBAP: [事务ID2][协议ID2=0][长度2=PDU+1][unitId 1B]
+     */
+    public byte[] buildConfigDataFrameV2(int transactionId, int unitId, int functionCode, java.util.List<ConfigItem> items) {
+        if (items == null) items = java.util.Collections.emptyList();
+        int count = items.size();
+        if (count > 255) {
+            throw new IllegalArgumentException("数据数量超过上限 255，当前=" + count);
         }
-        if (dataLen > 512) {
-            throw new IllegalArgumentException("数据长度超过上限 512 字节，当前=" + dataLen);
+
+        // 计算 items 总字节长度（dataId 1B + value）
+        int itemsBytes = 0;
+        for (ConfigItem it : items) {
+            itemsBytes += 1 + it.value.length;
         }
 
-        // PDU: [functionCode][startAddress 2B][dataLen 2B][segments...]
-        byte[] pdu = new byte[1 + 2 + 2 + dataLen];
+        // 组装 PDU
+        byte[] pdu = new byte[1 + 1 + itemsBytes];
         int p = 0;
         pdu[p++] = (byte) (functionCode & 0xFF);
-        pdu[p++] = (byte) ((startAddress >>> 8) & 0xFF);
-        pdu[p++] = (byte) (startAddress & 0xFF);
-        pdu[p++] = (byte) ((dataLen >>> 8) & 0xFF);
-        pdu[p++] = (byte) (dataLen & 0xFF);
-        for (TypedSegment seg : segments) {
-            pdu[p++] = (byte) (seg.typeId & 0xFF);
-            pdu[p++] = (byte) (seg.count & 0xFF);
-            if (seg.payload != null && seg.payload.length > 0) {
-                System.arraycopy(seg.payload, 0, pdu, p, seg.payload.length);
-                p += seg.payload.length;
-            }
+        pdu[p++] = (byte) (count & 0xFF);
+        for (ConfigItem it : items) {
+            pdu[p++] = (byte) (it.dataId & 0xFF);
+            System.arraycopy(it.value, 0, pdu, p, it.value.length);
+            p += it.value.length;
         }
 
-        // MBAP: [事务ID2][协议ID2=0][长度2=N+6][unitId 1B]
+        // MBAP
         byte[] mbap = new byte[7];
-        mbap[0] = (byte) ((transactionId >>> 8) & 0xFF);
+        mbap[0] = (byte) ((transactionId >> 8) & 0xFF);
         mbap[1] = (byte) (transactionId & 0xFF);
         mbap[2] = 0x00;
         mbap[3] = 0x00;
-        int mbapLen = pdu.length + 1; // N + 6（unitId 1B + PDU 1+2+2+N）
-        mbap[4] = (byte) ((mbapLen >>> 8) & 0xFF);
+        int mbapLen = pdu.length + 1;
+        mbap[4] = (byte) ((mbapLen >> 8) & 0xFF);
         mbap[5] = (byte) (mbapLen & 0xFF);
         mbap[6] = (byte) (unitId & 0xFF);
 
@@ -307,13 +441,13 @@ public class DataResponse {
     }
 
     /**
-     * 发送自定义数据帧（Typed 段版）
+     * 发送“前端参数配置下发”帧（新版：无类型标识）
      */
-    public void sendCustomDataFrameTyped(Socket socket, int unitId, int functionCode, int startAddress, int transactionId, java.util.List<TypedSegment> segments) throws java.io.IOException {
-        byte[] frame = buildCustomDataFrameTyped(unitId, functionCode, startAddress, transactionId, segments);
+    public void sendConfigDataFrameV2(java.net.Socket socket, int unitId, int functionCode, int transactionId, java.util.List<ConfigItem> items) throws java.io.IOException {
+        byte[] frame = buildConfigDataFrameV2(transactionId, unitId, functionCode, items);
         java.io.OutputStream out = socket.getOutputStream();
         out.write(frame);
         out.flush();
-        log.info("已发送自定义数据帧（Typed）：len={}，func=0x{}，startAddr=0x{}", frame.length, Integer.toHexString(functionCode), Integer.toHexString(startAddress));
+        log.info("已发送配置下发帧(V2，无类型标识)：len={}，func=0x{}，itemCount={}", frame.length, Integer.toHexString(functionCode), (items == null ? 0 : items.size()));
     }
 }
