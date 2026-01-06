@@ -44,6 +44,9 @@ public class DataToObj {
     private ProductWeekMapper productWeekMapper;
 
     @Autowired
+    private ControlParameterMapper controlParameterMapper;
+
+    @Autowired
     private DataResponse dataResponse;
 
     @Autowired

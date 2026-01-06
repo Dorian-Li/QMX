@@ -120,17 +120,15 @@ create table if not exists product_week(
 
 
 -- 0x05 控制参数（KV）
--- create table if not exists control_param_05 (
---     id          bigint primary key auto_increment,
---     devName     varchar(64)                     not null,
---     param_key   varchar(64)                     not null,
---     param_value double                          null,
---     batch_id    varchar(64)                     null     comment '批次ID（同一包内的关联ID）',
---     time        datetime default current_timestamp not null
--- ) engine=InnoDB default charset=utf8mb4 comment='0x05 控制参数（KV）';
+create table if not exists control_parameter(
+    id          bigint primary key auto_increment,
+    name        varchar(64)                     not null,
+    value       double                          null,
+    time        datetime default current_timestamp not null
+) engine=InnoDB default charset=utf8mb4 comment='0x05 控制参数';
 
--- create index idx_control_param_dev_key_time on control_param_05(devName, param_key, time);
--- create index idx_control_param_batch        on control_param_05(batch_id);
+-- create index idx_control_param_name_time on control_param(name, time);
+-- create index idx_control_param_batch        on control_param(batch_id);
 
 -- 0x06 运动参数（KV）
 -- create table if not exists motion_param_06 (

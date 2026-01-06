@@ -201,239 +201,231 @@ class QmxApplicationTests {
     }
 
 
-//    /**
-//     * 验证 0x07/0x08/0x09 类型化段的组帧是否符合 MBAP+PDU 以及解析规则
-//     */
-//    @Autowired
-//    private DataResponse dataResponse;
-//
-//    @org.junit.jupiter.api.Test
-//    public void testBuildCustomFrameTyped_BoolIntReal() {
-//        int unitId = 1;
-//        int functionCode = 0x10;
-//        int startAddress = 0x0000;
-//        int txId = 0x1234;
-//
-//        java.util.List<com.example.qmx.server.DataResponse.TypedSegment> segs = new java.util.ArrayList<>();
-//
-//        // 0x07-bool：低位优先，值 [true, false, true, true, false] => 0b00001101 = 0x0D
-//        segs.add(com.example.qmx.server.DataResponse.TypedSegment.ofBools(
-//                java.util.Arrays.asList(true, false, true, true, false)));
-//
-//        // 0x08-int16：大端，值 [1, 2] => 00 01 00 02
-//        segs.add(com.example.qmx.server.DataResponse.TypedSegment.ofInt16(
-//                java.util.Arrays.asList(1, 2)));
-//
-//        // 0x09-real32：IEEE-754 大端，示例 [123.45, -67.5]
-//        segs.add(com.example.qmx.server.DataResponse.TypedSegment.ofReal32(
-//                java.util.Arrays.asList(123.45, -67.5)));
-//
-//        // 修正：方法签名为 (unitId, functionCode, startAddress, transactionId, segments)
-//        byte[] frame = dataResponse.buildCustomDataFrameTyped(unitId, functionCode, startAddress, txId, segs);
-//        org.junit.jupiter.api.Assertions.assertNotNull(frame);
-//        org.junit.jupiter.api.Assertions.assertTrue(frame.length > 10);
-//
-//        // 校验 MBAP
-//        int mbapLen = ((frame[4] & 0xff) << 8) | (frame[5] & 0xff);
-//        org.junit.jupiter.api.Assertions.assertEquals(unitId, frame[6] & 0xff);
-//
-//        // 修正：PDU 长度 = MBAP.length - 1
-//        int pduLen = mbapLen - 1;
-//        byte[] pdu = java.util.Arrays.copyOfRange(frame, 7, 7 + pduLen);
-//        // 功能码
-//        org.junit.jupiter.api.Assertions.assertEquals(functionCode, pdu[0] & 0xff);
-//        // 起始地址
-//        org.junit.jupiter.api.Assertions.assertEquals((startAddress >> 8) & 0xff, pdu[1] & 0xff);
-//        org.junit.jupiter.api.Assertions.assertEquals(startAddress & 0xff, pdu[2] & 0xff);
-//        // 修正：数据长度字段在 pdu[3..4]
-//        int dataLen = ((pdu[3] & 0xff) << 8) | (pdu[4] & 0xff);
-//        org.junit.jupiter.api.Assertions.assertEquals(pduLen - 5, dataLen);
-//
-//        // 修正：segments 从偏移 5 开始
-//        int p = 5;
-//
-//        // 段1：bool(0x07)
-//        int t1 = pdu[p++] & 0xff;
-//        int c1 = pdu[p++] & 0xff;
-//        org.junit.jupiter.api.Assertions.assertEquals(0x07, t1);
-//        org.junit.jupiter.api.Assertions.assertEquals(5, c1);
-//        int boolBytes = (c1 + 7) / 8;
-//        byte[] boolPayload = java.util.Arrays.copyOfRange(pdu, p, p + boolBytes);
-//        p += boolBytes;
-//        org.junit.jupiter.api.Assertions.assertEquals(1, boolBytes);
-//        org.junit.jupiter.api.Assertions.assertEquals(0x0D, boolPayload[0] & 0xff); // 00001101
-//
-//        // 段2：int16(0x08)
-//        int t2 = pdu[p++] & 0xff;
-//        int c2 = pdu[p++] & 0xff;
-//        org.junit.jupiter.api.Assertions.assertEquals(0x08, t2);
-//        org.junit.jupiter.api.Assertions.assertEquals(2, c2);
-//        byte[] intPayload = java.util.Arrays.copyOfRange(pdu, p, p + c2 * 2);
-//        p += c2 * 2;
-//        org.junit.jupiter.api.Assertions.assertArrayEquals(
-//                new byte[]{0x00, 0x01, 0x00, 0x02}, intPayload);
-//
-//        // 段3：real32(0x09)
-//        int t3 = pdu[p++] & 0xff;
-//        int c3 = pdu[p++] & 0xff;
-//        org.junit.jupiter.api.Assertions.assertEquals(0x09, t3);
-//        org.junit.jupiter.api.Assertions.assertEquals(2, c3);
-//        byte[] realPayload = java.util.Arrays.copyOfRange(pdu, p, p + c3 * 4);
-//        p += c3 * 4;
-//
-//        int r1 = ((realPayload[0] & 0xff) << 24) | ((realPayload[1] & 0xff) << 16)
-//                | ((realPayload[2] & 0xff) << 8) | (realPayload[3] & 0xff);
-//        int r2 = ((realPayload[4] & 0xff) << 24) | ((realPayload[5] & 0xff) << 16)
-//                | ((realPayload[6] & 0xff) << 8) | (realPayload[7] & 0xff);
-//        org.junit.jupiter.api.Assertions.assertEquals(java.lang.Float.floatToIntBits(123.45f), r1);
-//        org.junit.jupiter.api.Assertions.assertEquals(java.lang.Float.floatToIntBits(-67.5f), r2);
-//
-//        // 修正：PDU 长度应为 5 + dataLen
-//        org.junit.jupiter.api.Assertions.assertEquals(pdu.length, 5 + dataLen);
-//    }
-//
-//    /**
-//     * 验证 bool 按位打包在跨字节边界（>8位）时仍保持低位优先且字节正确
-//     */
-//    @org.junit.jupiter.api.Test
-//    public void testBoolPackingBoundary() {
-//        // 10 位：索引 0,2,3,7,8 置 1 => byte0: 10001101(0x8D), byte1: 00000001(0x01)
-//        List<Boolean> values = Arrays.asList(
-//                true, false, true, true, false, false, false, true, true, false
-//        );
-//        com.example.qmx.server.DataResponse.TypedSegment seg =
-//                com.example.qmx.server.DataResponse.TypedSegment.ofBools(values);
-//
-//        org.junit.jupiter.api.Assertions.assertEquals(0x07, seg.typeId);
-//        org.junit.jupiter.api.Assertions.assertEquals(10, seg.count);
-//        org.junit.jupiter.api.Assertions.assertEquals(2, seg.payload.length);
-//        org.junit.jupiter.api.Assertions.assertEquals(0x8D, seg.payload[0] & 0xFF);
-//        org.junit.jupiter.api.Assertions.assertEquals(0x01, seg.payload[1] & 0xFF);
-//    }
-
-//    /**
-//     * 验证 sendResponse 在长度一致时：
-//     * - 返回 dataLen
-//     * - 写出的帧中 PDU 数据段为全 0xAA，长度等于 dataLen
-//     */
-//    @Test
-//    public void testSendResponse_LengthMatch() throws Exception {
-//        // 构造一个可捕获写出内容的 Socket
-//        final java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-//        java.net.Socket socket = new java.net.Socket() {
-//            @Override public java.io.OutputStream getOutputStream() { return bos; }
-//            @Override public boolean isClosed() { return false; }
-//        };
-//
-//        // 构造一致的 MBAP 和 PDU
-//        byte functionCode = 0x03;
-//        int dataLen = 10; // 声明数据长度为 10
-//        byte[] incomingPdu = new byte[1 + 2 + dataLen];
-//        incomingPdu[0] = functionCode;
-//        incomingPdu[1] = (byte) ((dataLen >> 8) & 0xFF);
-//        incomingPdu[2] = (byte) (dataLen & 0xFF);
-//        // 实际数据内容随便填充（不会用于确认帧中，确认帧数据段为 0xAA）
-//        for (int i = 3; i < incomingPdu.length; i++) incomingPdu[i] = (byte) i;
-//
-//        // MBAP：transactionId=0x1234, protocolId=0x0000, length先占位, unitId=0x01
-//        byte[] incomingMbap = new byte[] {
-//                0x12, 0x34,
-//                0x00, 0x00,
-//                0x00, 0x00, // 这里占位，DataResponse 会重算
-//                0x01
-//        };
-//
-//        int ret = dataResponse.sendResponse(socket, incomingMbap, incomingPdu);
-//        org.junit.jupiter.api.Assertions.assertEquals(dataLen, ret);
-//
-//        // 解析写出的帧
-//        byte[] frame = bos.toByteArray();
-//        org.junit.jupiter.api.Assertions.assertTrue(frame.length >= 12);
-//
-//        // 校验 MBAP
-//        org.junit.jupiter.api.Assertions.assertEquals(0x12, frame[0] & 0xFF);
-//        org.junit.jupiter.api.Assertions.assertEquals(0x34, frame[1] & 0xFF);
-//        org.junit.jupiter.api.Assertions.assertEquals(0x00, frame[2] & 0xFF);
-//        org.junit.jupiter.api.Assertions.assertEquals(0x00, frame[3] & 0xFF);
-//        int mbapLen = ((frame[4] & 0xFF) << 8) | (frame[5] & 0xFF);
-//        org.junit.jupiter.api.Assertions.assertEquals(0x01, frame[6] & 0xFF);
-//
-//        // 解析 PDU
-//        int pduLen = mbapLen - 1;
-//        byte[] pdu = java.util.Arrays.copyOfRange(frame, 7, 7 + pduLen);
-//        org.junit.jupiter.api.Assertions.assertEquals(functionCode, pdu[0] & 0xFF);
-//        int declaredLen = ((pdu[1] & 0xFF) << 8) | (pdu[2] & 0xFF);
-//        org.junit.jupiter.api.Assertions.assertEquals(dataLen, declaredLen);
-//        // 数据段应全部为 0xAA，长度等于 dataLen
-//        for (int i = 3; i < pdu.length; i++) {
-//            org.junit.jupiter.api.Assertions.assertEquals(0xAA, pdu[i] & 0xFF);
-//        }
-//        org.junit.jupiter.api.Assertions.assertEquals(3 + dataLen, pdu.length);
-//        // MBAP.length 应为 UnitId(1) + PDU.length
-//        org.junit.jupiter.api.Assertions.assertEquals(pdu.length + 1, mbapLen);
-//        // 整帧长度应为 7 + pdu.length
-//        org.junit.jupiter.api.Assertions.assertEquals(7 + pdu.length, frame.length);
-//    }
-//
-//    /**
-//     * 验证 sendResponse 在长度不一致时：
-//     * - 返回 -1
-//     * - 写出的帧为错误帧：PDU 数据长度为 2，数据内容 0xFF 0xFF（表示 -1）
-//     */
-//    @Test
-//    public void testSendResponse_LengthMismatch() throws Exception {
-//        final java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-//        java.net.Socket socket = new java.net.Socket() {
-//            @Override public java.io.OutputStream getOutputStream() { return bos; }
-//            @Override public boolean isClosed() { return false; }
-//        };
-//
-//        byte functionCode = 0x03;
-//        int dataLen = 10; // 声明为 10，但实际只提供 5 字节数据
-//        int actualDataLen = 5;
-//        byte[] incomingPdu = new byte[1 + 2 + actualDataLen];
-//        incomingPdu[0] = functionCode;
-//        incomingPdu[1] = (byte) ((dataLen >> 8) & 0xFF);
-//        incomingPdu[2] = (byte) (dataLen & 0xFF);
-//        for (int i = 3; i < incomingPdu.length; i++) incomingPdu[i] = (byte) i;
-//
-//        byte[] incomingMbap = new byte[] {
-//                0x12, 0x34,
-//                0x00, 0x00,
-//                0x00, 0x00,
-//                0x01
-//        };
-//
-//        int ret = dataResponse.sendResponse(socket, incomingMbap, incomingPdu);
-//        org.junit.jupiter.api.Assertions.assertEquals(-1, ret);
-//
-//        byte[] frame = bos.toByteArray();
-//        org.junit.jupiter.api.Assertions.assertTrue(frame.length >= 12);
-//
-//        // 校验 MBAP
-//        org.junit.jupiter.api.Assertions.assertEquals(0x12, frame[0] & 0xFF);
-//        org.junit.jupiter.api.Assertions.assertEquals(0x34, frame[1] & 0xFF);
-//        int mbapLen = ((frame[4] & 0xFF) << 8) | (frame[5] & 0xFF);
-//        org.junit.jupiter.api.Assertions.assertEquals(0x01, frame[6] & 0xFF);
-//
-//        // 解析 PDU：应为 [func][00][02][FF][FF]
-//        int pduLen = mbapLen - 1;
-//        byte[] pdu = java.util.Arrays.copyOfRange(frame, 7, 7 + pduLen);
-//        org.junit.jupiter.api.Assertions.assertEquals(functionCode, pdu[0] & 0xFF);
-//        org.junit.jupiter.api.Assertions.assertEquals(0x00, pdu[1] & 0xFF);
-//        org.junit.jupiter.api.Assertions.assertEquals(0x02, pdu[2] & 0xFF);
-//        org.junit.jupiter.api.Assertions.assertEquals(0xFF, pdu[3] & 0xFF);
-//        org.junit.jupiter.api.Assertions.assertEquals(0xFF, pdu[4] & 0xFF);
-//        org.junit.jupiter.api.Assertions.assertEquals(5, pdu.length);
-//
-//        // MBAP.length 应为 UnitId(1) + PDU.length（此处 PDU.length=5 => 1+5=6）
-//        org.junit.jupiter.api.Assertions.assertEquals(6, mbapLen);
-//        // 整帧应为 7 + 5 = 12（不变）
-//        org.junit.jupiter.api.Assertions.assertEquals(12, frame.length);
-//    }
-
+    /**
+     * 验证 0x07/0x08/0x09 类型化段的组帧是否符合 MBAP+PDU 以及解析规则
+     */
     @Autowired
     private DataResponse dataResponse;
+
+    @org.junit.jupiter.api.Test
+    public void testBuildCustomFrameTyped_BoolIntReal() {
+        int unitId = 1;
+        int functionCode = 0x10;
+        int startAddress = 0x0000;
+        int txId = 0x1234;
+
+        java.util.List<com.example.qmx.server.DataResponse.TypedSegment> segs = new java.util.ArrayList<>();
+
+        // 0x07-bool：低位优先，值 [true, false, true, true, false] => 0b00001101 = 0x0D
+        segs.add(com.example.qmx.server.DataResponse.TypedSegment.ofBools(
+                java.util.Arrays.asList(true, false, true, true, false)));
+
+        // 0x08-int16：大端，值 [1, 2] => 00 01 00 02
+        segs.add(com.example.qmx.server.DataResponse.TypedSegment.ofInt16(
+                java.util.Arrays.asList(1, 2)));
+
+        // 0x09-real32：IEEE-754 大端，示例 [123.45, -67.5]
+        segs.add(com.example.qmx.server.DataResponse.TypedSegment.ofReal32(
+                java.util.Arrays.asList(123.45, -67.5)));
+
+        // 修正：方法签名为 (unitId, functionCode, startAddress, transactionId, segments)
+        byte[] frame = dataResponse.buildCustomDataFrameTyped(unitId, functionCode, startAddress, txId, segs);
+        org.junit.jupiter.api.Assertions.assertNotNull(frame);
+        org.junit.jupiter.api.Assertions.assertTrue(frame.length > 10);
+
+        // 校验 MBAP
+        int mbapLen = ((frame[4] & 0xff) << 8) | (frame[5] & 0xff);
+        org.junit.jupiter.api.Assertions.assertEquals(unitId, frame[6] & 0xff);
+
+        // 修正：PDU 长度 = MBAP.length - 1
+        int pduLen = mbapLen - 1;
+        byte[] pdu = java.util.Arrays.copyOfRange(frame, 7, 7 + pduLen);
+        // 功能码
+        org.junit.jupiter.api.Assertions.assertEquals(functionCode, pdu[0] & 0xff);
+        // 起始地址
+        org.junit.jupiter.api.Assertions.assertEquals((startAddress >> 8) & 0xff, pdu[1] & 0xff);
+        org.junit.jupiter.api.Assertions.assertEquals(startAddress & 0xff, pdu[2] & 0xff);
+        // 修正：数据长度字段在 pdu[3..4]
+        int dataLen = ((pdu[3] & 0xff) << 8) | (pdu[4] & 0xff);
+        org.junit.jupiter.api.Assertions.assertEquals(pduLen - 5, dataLen);
+
+        // 修正：segments 从偏移 5 开始
+        int p = 5;
+
+        // 段1：bool(0x07)
+        int t1 = pdu[p++] & 0xff;
+        int c1 = pdu[p++] & 0xff;
+        org.junit.jupiter.api.Assertions.assertEquals(0x07, t1);
+        org.junit.jupiter.api.Assertions.assertEquals(5, c1);
+        int boolBytes = (c1 + 7) / 8;
+        byte[] boolPayload = java.util.Arrays.copyOfRange(pdu, p, p + boolBytes);
+        p += boolBytes;
+        org.junit.jupiter.api.Assertions.assertEquals(1, boolBytes);
+        org.junit.jupiter.api.Assertions.assertEquals(0x0D, boolPayload[0] & 0xff); // 00001101
+
+        // 段2：int16(0x08)
+        int t2 = pdu[p++] & 0xff;
+        int c2 = pdu[p++] & 0xff;
+        org.junit.jupiter.api.Assertions.assertEquals(0x08, t2);
+        org.junit.jupiter.api.Assertions.assertEquals(2, c2);
+        byte[] intPayload = java.util.Arrays.copyOfRange(pdu, p, p + c2 * 2);
+        p += c2 * 2;
+        org.junit.jupiter.api.Assertions.assertArrayEquals(
+                new byte[]{0x00, 0x01, 0x00, 0x02}, intPayload);
+
+        // 段3：real32(0x09)
+        int t3 = pdu[p++] & 0xff;
+        int c3 = pdu[p++] & 0xff;
+        org.junit.jupiter.api.Assertions.assertEquals(0x09, t3);
+        org.junit.jupiter.api.Assertions.assertEquals(2, c3);
+        byte[] realPayload = java.util.Arrays.copyOfRange(pdu, p, p + c3 * 4);
+        p += c3 * 4;
+
+        int r1 = ((realPayload[0] & 0xff) << 24) | ((realPayload[1] & 0xff) << 16)
+                | ((realPayload[2] & 0xff) << 8) | (realPayload[3] & 0xff);
+        int r2 = ((realPayload[4] & 0xff) << 24) | ((realPayload[5] & 0xff) << 16)
+                | ((realPayload[6] & 0xff) << 8) | (realPayload[7] & 0xff);
+        org.junit.jupiter.api.Assertions.assertEquals(java.lang.Float.floatToIntBits(123.45f), r1);
+        org.junit.jupiter.api.Assertions.assertEquals(java.lang.Float.floatToIntBits(-67.5f), r2);
+
+        // 修正：PDU 长度应为 5 + dataLen
+        org.junit.jupiter.api.Assertions.assertEquals(pdu.length, 5 + dataLen);
+    }
+
+    /**
+     * 验证 bool 按位打包在跨字节边界（>8位）时仍保持低位优先且字节正确
+     */
+    @org.junit.jupiter.api.Test
+    public void testBoolPackingBoundary() {
+        // 10 位：索引 0,2,3,7,8 置 1 => byte0: 10001101(0x8D), byte1: 00000001(0x01)
+        List<Boolean> values = Arrays.asList(
+                true, false, true, true, false, false, false, true, true, false
+        );
+        com.example.qmx.server.DataResponse.TypedSegment seg =
+                com.example.qmx.server.DataResponse.TypedSegment.ofBools(values);
+
+        org.junit.jupiter.api.Assertions.assertEquals(0x07, seg.typeId);
+        org.junit.jupiter.api.Assertions.assertEquals(10, seg.count);
+        org.junit.jupiter.api.Assertions.assertEquals(2, seg.payload.length);
+        org.junit.jupiter.api.Assertions.assertEquals(0x8D, seg.payload[0] & 0xFF);
+        org.junit.jupiter.api.Assertions.assertEquals(0x01, seg.payload[1] & 0xFF);
+    }
+
+    /**
+     * 验证 sendResponse 在长度一致时：
+     * - 返回 dataLen
+     * - 写出的帧中 PDU 仅包含功能码与数据长度（不包含数据内容）
+     */
+    @Test
+    public void testSendResponse_LengthMatch() throws Exception {
+        // 构造一个可捕获写出内容的 Socket
+        final java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.net.Socket socket = new java.net.Socket() {
+            @Override public java.io.OutputStream getOutputStream() { return bos; }
+            @Override public boolean isClosed() { return false; }
+        };
+
+        // 构造一致的 MBAP 和 PDU
+        byte functionCode = 0x03;
+        int dataLen = 10; // 声明数据长度为 10
+        byte[] incomingPdu = new byte[1 + 2 + dataLen];
+        incomingPdu[0] = functionCode;
+        incomingPdu[1] = (byte) ((dataLen >> 8) & 0xFF);
+        incomingPdu[2] = (byte) (dataLen & 0xFF);
+        for (int i = 3; i < incomingPdu.length; i++) incomingPdu[i] = (byte) i;
+
+        byte[] incomingMbap = new byte[] {
+                0x12, 0x34,
+                0x00, 0x00,
+                0x00, 0x00, // 这里占位，DataResponse 会重算
+                0x01
+        };
+
+        int ret = dataResponse.sendResponse(socket, incomingMbap, incomingPdu);
+        org.junit.jupiter.api.Assertions.assertEquals(dataLen, ret);
+
+        // 解析写出的帧
+        byte[] frame = bos.toByteArray();
+        org.junit.jupiter.api.Assertions.assertTrue(frame.length >= 10);
+
+        // 校验 MBAP
+        org.junit.jupiter.api.Assertions.assertEquals(0x12, frame[0] & 0xFF);
+        org.junit.jupiter.api.Assertions.assertEquals(0x34, frame[1] & 0xFF);
+        org.junit.jupiter.api.Assertions.assertEquals(0x00, frame[2] & 0xFF);
+        org.junit.jupiter.api.Assertions.assertEquals(0x00, frame[3] & 0xFF);
+        int mbapLen = ((frame[4] & 0xFF) << 8) | (frame[5] & 0xFF);
+        org.junit.jupiter.api.Assertions.assertEquals(0x01, frame[6] & 0xFF);
+
+        // 解析 PDU：仅 [func][len_hi][len_lo]
+        int pduLen = mbapLen - 1;
+        byte[] pdu = java.util.Arrays.copyOfRange(frame, 7, 7 + pduLen);
+        org.junit.jupiter.api.Assertions.assertEquals(functionCode, pdu[0] & 0xFF);
+        int declaredLen = ((pdu[1] & 0xFF) << 8) | (pdu[2] & 0xFF);
+        org.junit.jupiter.api.Assertions.assertEquals(dataLen, declaredLen);
+        org.junit.jupiter.api.Assertions.assertEquals(3, pdu.length);
+        // MBAP.length 应为 UnitId(1) + PDU.length（此处 1+3=4）
+        org.junit.jupiter.api.Assertions.assertEquals(pdu.length + 1, mbapLen);
+        // 整帧长度应为 7 + pdu.length（此处 7+3=10）
+        org.junit.jupiter.api.Assertions.assertEquals(7 + pdu.length, frame.length);
+    }
+
+    /**
+     * 验证 sendResponse 在长度不一致时：
+     * - 返回 -1
+     * - 写出的帧为错误帧：PDU 仅 [func][FF][FF]（数据长度置为 -1），不包含数据内容
+     */
+    @Test
+    public void testSendResponse_LengthMismatch() throws Exception {
+        final java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        java.net.Socket socket = new java.net.Socket() {
+            @Override public java.io.OutputStream getOutputStream() { return bos; }
+            @Override public boolean isClosed() { return false; }
+        };
+
+        byte functionCode = 0x03;
+        int dataLen = 10; // 声明为 10，但实际只提供 5 字节数据
+        int actualDataLen = 5;
+        byte[] incomingPdu = new byte[1 + 2 + actualDataLen];
+        incomingPdu[0] = functionCode;
+        incomingPdu[1] = (byte) ((dataLen >> 8) & 0xFF);
+        incomingPdu[2] = (byte) (dataLen & 0xFF);
+        for (int i = 3; i < incomingPdu.length; i++) incomingPdu[i] = (byte) i;
+
+        byte[] incomingMbap = new byte[] {
+                0x12, 0x34,
+                0x00, 0x00,
+                0x00, 0x00,
+                0x01
+        };
+
+        int ret = dataResponse.sendResponse(socket, incomingMbap, incomingPdu);
+        org.junit.jupiter.api.Assertions.assertEquals(-1, ret);
+
+        byte[] frame = bos.toByteArray();
+        org.junit.jupiter.api.Assertions.assertTrue(frame.length >= 10);
+
+        // 校验 MBAP
+        org.junit.jupiter.api.Assertions.assertEquals(0x12, frame[0] & 0xFF);
+        org.junit.jupiter.api.Assertions.assertEquals(0x34, frame[1] & 0xFF);
+        int mbapLen = ((frame[4] & 0xFF) << 8) | (frame[5] & 0xFF);
+        org.junit.jupiter.api.Assertions.assertEquals(0x01, frame[6] & 0xFF);
+
+        // 解析 PDU：应为 [func][FF][FF]
+        int pduLen = mbapLen - 1;
+        byte[] pdu = java.util.Arrays.copyOfRange(frame, 7, 7 + pduLen);
+        org.junit.jupiter.api.Assertions.assertEquals(functionCode, pdu[0] & 0xFF);
+        org.junit.jupiter.api.Assertions.assertEquals(0xFF, pdu[1] & 0xFF);
+        org.junit.jupiter.api.Assertions.assertEquals(0xFF, pdu[2] & 0xFF);
+        org.junit.jupiter.api.Assertions.assertEquals(3, pdu.length);
+
+        // MBAP.length 应为 UnitId(1) + PDU.length（此处 1+3=4）
+        org.junit.jupiter.api.Assertions.assertEquals(4, mbapLen);
+        // 整帧应为 7 + 3 = 10
+        org.junit.jupiter.api.Assertions.assertEquals(10, frame.length);
+    }
+
+//    @Autowired
+//    private DataResponse dataResponse;
     @Test
     public void testBuildConfigDataFrameV2_ExamplePdu() {
         // 前端示例：0x01(bool=true) 与 0x07(real=20.0)
