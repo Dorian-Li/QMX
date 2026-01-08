@@ -118,7 +118,7 @@ public class MainController {
         resp.put("ok", true);
         return resp;
     }
-
+    // ==============================定长组帧下发（按类型标识）===============================
 
     // 类型安全段的请求体（typeId 固定：0x07-bool、0x08-int、0x09-real）
     public static class TypedSegmentDto {
@@ -133,11 +133,12 @@ public class MainController {
         public java.util.List<TypedSegmentDto> segments;
     }
 
+
     @PostMapping("/sendConfigData")
     @ApiOperation(value = "按类型标识组帧下发", notes = "0x07-bool、0x08-int16、0x09-real32，按解析格式组帧下发")
     public java.util.Map<String, Object> sendCustomFrameTyped(@RequestBody TypedFrameRequest req) throws Exception {
         java.util.Map<String, Object> resp = new java.util.HashMap<>();
-        if (req == null || req.unitId == null || req.functionCode == null || req.startAddress == null || req.segments == null || req.segments.isEmpty()) {
+        if (req == null || req.unitId == null || req.functionCode == null || req.segments == null || req.segments.isEmpty()) {
             resp.put("ok", false);
             resp.put("msg", "参数不完整：需要 unitId、functionCode、startAddress、segments");
             return resp;
@@ -185,6 +186,76 @@ public class MainController {
         }
 
         boolean ok = dataServer.sendTypedSegments(req.unitId, req.functionCode, req.startAddress, segs);
+        resp.put("ok", ok);
+        resp.put("msg", ok ? "发送成功" : "发送失败");
+        return resp;
+    }
+
+    // ==============================不定长组帧下发（按类型标识）===============================
+    public static class ConfigItemDto {
+        public Integer dataId;   // 0x01..0x13
+        public Object value;     // 值：0x01-0x05 用整数0-255；0x06 用int；0x07-0x13 用 double
+    }
+
+    public static class ConfigFrameRequest {
+        public Integer unitId;
+        public Integer functionCode;
+        public java.util.List<ConfigItemDto> items;
+    }
+
+    // 不定长组帧下发（V2：无类型标识，按 dataId + value）
+    @PostMapping("/sendConfigDataV2")
+    @ApiOperation(value = "参数配置下发(V2)", notes = "V2：items=[dataId(1B)+value(NB)]，0x01-0x05=1B，0x06=2B，0x07-0x13=4B(real32)")
+    public java.util.Map<String, Object> sendConfigDataV2(@RequestBody ConfigFrameRequest req) throws Exception {
+        java.util.Map<String, Object> resp = new java.util.HashMap<>();
+        if (req == null || req.unitId == null || req.functionCode == null || req.items == null || req.items.isEmpty()) {
+            resp.put("ok", false);
+            resp.put("msg", "参数不完整：需要 unitId、functionCode、items");
+            return resp;
+        }
+        if (!dataServer.isGatewayConnected()) {
+            resp.put("ok", false);
+            resp.put("msg", "网关未连接，无法下发配置");
+            return resp;
+        }
+
+        java.util.List<com.example.qmx.server.DataResponse.ConfigItem> items = new java.util.ArrayList<>();
+        for (ConfigItemDto dto : req.items) {
+            if (dto == null || dto.dataId == null) {
+                resp.put("ok", false);
+                resp.put("msg", "items 中存在空项或缺少 dataId");
+                return resp;
+            }
+            int dataId = dto.dataId;
+            Object val = dto.value;
+            try {
+                if (dataId >= 0x01 && dataId <= 0x05) {
+                    int b = (val == null) ? 0 : Integer.parseInt(String.valueOf(val));
+                    if (b < 0 || b > 255) {
+                        resp.put("ok", false);
+                        resp.put("msg", "dataId=0x" + Integer.toHexString(dataId) + " 的取值必须在 0-255 范围内");
+                        return resp;
+                    }
+                    items.add(com.example.qmx.server.DataResponse.ConfigItem.ofChar(dataId, b));
+                } else if (dataId == 0x06) {
+                    int v = (val == null) ? 0 : Integer.parseInt(String.valueOf(val));
+                    items.add(com.example.qmx.server.DataResponse.ConfigItem.ofInt(dataId, v));
+                } else if (dataId >= 0x07 && dataId <= 0x13) {
+                    double d = (val == null) ? 0.0 : Double.parseDouble(String.valueOf(val));
+                    items.add(com.example.qmx.server.DataResponse.ConfigItem.ofReal(dataId, d));
+                } else {
+                    resp.put("ok", false);
+                    resp.put("msg", "不支持的 dataId: 0x" + Integer.toHexString(dataId) + "（仅支持 0x01-0x13）");
+                    return resp;
+                }
+            } catch (Exception ex) {
+                resp.put("ok", false);
+                resp.put("msg", "数据项解析失败: dataId=0x" + Integer.toHexString(dataId) + "，错误=" + ex.getMessage());
+                return resp;
+            }
+        }
+
+        boolean ok = dataServer.sendConfigItemsV2(req.unitId, req.functionCode, items);
         resp.put("ok", ok);
         resp.put("msg", ok ? "发送成功" : "发送失败");
         return resp;

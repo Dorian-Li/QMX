@@ -179,5 +179,24 @@ public class DataServer {
             return false;
         }
     }
+
+    // 新增：发送“参数配置下发 V2（无类型标识）”帧
+    public boolean sendConfigItemsV2(int unitId, int functionCode, java.util.List<DataResponse.ConfigItem> items) {
+        try {
+            if (!isGatewayConnected()) {
+                logger.error("网关未连接，无法发送配置下发(V2)");
+                return false;
+            }
+            int txId = FIXED_TX_ID;
+            // 直接使用 DataResponse 发送 V2 帧
+            dataResponse.sendConfigDataFrameV2(gatewaySocket, unitId, functionCode, txId, items);
+            logger.info("已发送配置下发帧(V2)：txId={}, unitId={}, func=0x{}, itemCount={}",
+                    txId, unitId, Integer.toHexString(functionCode), (items == null ? 0 : items.size()));
+            return true;
+        } catch (Exception e) {
+            logger.error("发送配置下发帧(V2)失败: {}", e.getMessage());
+            return false;
+        }
+    }
 }
 
