@@ -412,6 +412,8 @@ public class DataToObj {
                     System.out.println("product_hourly 插入失败: index=" + hourlyIndex + " numHourly=" + numHourly);
                 }
             }
+
+
             if (production.size() >= 52) {
                 int dayOfWeek = nowTime.getDayOfWeek().getValue();
                 int dailyIndex = 24 + (dayOfWeek - 1);
