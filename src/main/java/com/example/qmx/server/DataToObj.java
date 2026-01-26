@@ -4,6 +4,8 @@ import com.example.qmx.domain.*;
 import com.example.qmx.mapper.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -30,6 +32,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Service
 public class DataToObj {
 
+    private static final Logger log = LoggerFactory.getLogger(DataToObj.class);
     @Autowired
     private DeviceStatusMapper deviceStatusMapper;
 
@@ -137,7 +140,7 @@ public class DataToObj {
      *      0x06 运动参数     单长=32bit（4字节）
      */
     public String handleModbusFrame(byte[] mbap, byte[] pdu) {
-        // 基本校验
+        long tStart = System.currentTimeMillis();
         if (mbap == null || mbap.length != 7 || pdu == null || pdu.length < 3) {
             throw new IllegalArgumentException("非法帧：MBAP 或 PDU 长度不正确");
         }
@@ -160,18 +163,26 @@ public class DataToObj {
         // 解析数据内容 Map<typeId, List<Long>>
         Map<Integer, List<Long>> decoded = parseDataSegments(pdu, 3, dataLen);
 
-        // 报警处理
+        long tAfterDecode = System.currentTimeMillis();
+        log.info("E2E[入队/出队] txId={}, decodeCostMs={}", transactionId, (tAfterDecode - tStart));
+
         try {
             handleAlarmAndNotify(decoded, unitId);
         } catch (Exception e) {
             System.err.println("报警处理/上报异常: " + e.getMessage());
         }
 
+        long tBeforeDb = System.currentTimeMillis();
+        log.info("E2E[开始写DB] txId={}, waitBeforeDbMs={}", transactionId, (tBeforeDb - tAfterDecode));
+
         try {
-            routeToDb(decoded); 
+            routeToDb(decoded);
         } catch (Exception e) {
             System.err.println("解析/入库过程发生异常: " + e.getMessage());
         }
+
+        long tAfterDb = System.currentTimeMillis();
+        log.info("E2E[写完DB] txId={}, dbCostMs={}, totalCostMs={}", transactionId, (tAfterDb - tBeforeDb), (tAfterDb - tStart));
 
 //        try {
 //            processZljcData(decoded);

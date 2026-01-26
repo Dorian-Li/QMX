@@ -1,22 +1,24 @@
 package com.example.qmx.server;
 
+import com.example.qmx.config.RabbitConfig;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import org.slf4j.Logger;
-
 import javax.annotation.Resource;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import com.serotonin.modbus4j.ModbusFactory;
 import com.serotonin.modbus4j.ModbusMaster;
@@ -51,6 +53,9 @@ public class DataServer {
     @Autowired
     private DataToObj dataToObj;
 
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
+
     // 固定事务ID
     private static final int FIXED_TX_ID = 0x0001;
 
@@ -78,6 +83,7 @@ public class DataServer {
      * 返回解析后的简要 JSON（便于接口联调）
      */
     public String fetchData() {
+        long tFetchStart = System.currentTimeMillis();
         try {
             if (serverSocket == null || serverSocket.isClosed()) {
                 serverSocket = new ServerSocket(listenPort);
@@ -102,11 +108,10 @@ public class DataServer {
             }
 
             int transactionId = ((mbap[0] & 0xFF) << 8) | (mbap[1] & 0xFF);
-            int protocolId   = ((mbap[2] & 0xFF) << 8) | (mbap[3] & 0xFF);
-            int length       = ((mbap[4] & 0xFF) << 8) | (mbap[5] & 0xFF);
-            byte unitId      = mbap[6]; // UnitId 在 MBAP[6]
+            int protocolId = ((mbap[2] & 0xFF) << 8) | (mbap[3] & 0xFF);
+            int length = ((mbap[4] & 0xFF) << 8) | (mbap[5] & 0xFF);
+            byte unitId = mbap[6];
 
-            // 读取 PDU 长度
             int pduLength = length - 1;
             if (pduLength <= 0) {
                 throw new RuntimeException("非法长度字段（length<=1）");
@@ -117,8 +122,26 @@ public class DataServer {
                 throw new RuntimeException("读取 PDU 失败（长度不匹配或连接关闭）");
             }
 
-            String summary = dataToObj.handleModbusFrame(mbap, pdu);
-            return summary;
+            long tAfterRead = System.currentTimeMillis();
+            logger.info("E2E[接收点] txId={}, netCostMs={}", transactionId, (tAfterRead - tFetchStart));
+
+            byte[] body = buildMessageBody(mbap, pdu);
+            long receivedAt = tAfterRead;
+            String messageId = UUID.randomUUID().toString();
+
+            rabbitTemplate.convertAndSend(RabbitConfig.MODBUS_EXCHANGE, RabbitConfig.MODBUS_ROUTING_KEY, body, message -> {
+                message.getMessageProperties().setMessageId(messageId);
+                message.getMessageProperties().setHeader("txId", transactionId);
+                message.getMessageProperties().setHeader("unitId", unitId & 0xFF);
+                message.getMessageProperties().setHeader("protocolId", protocolId);
+                message.getMessageProperties().setHeader("receivedAt", receivedAt);
+                return message;
+            });
+
+            long tAfterEnqueue = System.currentTimeMillis();
+            logger.info("E2E[入队成功] txId={}, enqueueCostMs={}", transactionId, (tAfterEnqueue - tAfterRead));
+
+            return "{\"transactionId\":" + transactionId + ",\"enqueued\":true}";
         } catch (Exception e) {
             logger.error("服务端接收或解析数据失败: {}", e.toString());
             closeGatewaySocket();
@@ -160,7 +183,6 @@ public class DataServer {
                 unitId, startAddress, values != null ? values.length : 0, frame.length);
     }
 
-    // 精确读取指定长度的字节，若读取失败返回 null
     private byte[] readFully(InputStream in, int len) throws Exception {
         byte[] buf = new byte[len];
         int off = 0;
@@ -172,6 +194,20 @@ public class DataServer {
             off += r;
         }
         return buf;
+    }
+
+    private byte[] buildMessageBody(byte[] mbap, byte[] pdu) {
+        int mbapLen = mbap != null ? mbap.length : 0;
+        int pduLen = pdu != null ? pdu.length : 0;
+        byte[] body = new byte[1 + mbapLen + pduLen];
+        body[0] = (byte) mbapLen;
+        if (mbapLen > 0) {
+            System.arraycopy(mbap, 0, body, 1, mbapLen);
+        }
+        if (pduLen > 0) {
+            System.arraycopy(pdu, 0, body, 1 + mbapLen, pduLen);
+        }
+        return body;
     }
 
     // 一次性发送

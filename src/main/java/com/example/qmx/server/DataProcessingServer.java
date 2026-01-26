@@ -25,9 +25,8 @@ public class DataProcessingServer {
         Thread serverLoopThread = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
-                    // 阻塞等待并接收一帧，内部已完成解析与入库
                     String summary = dataServer.fetchData();
-                    System.out.println("接收并解析完成: " + summary);
+                    System.out.println("接收并入队完成: " + summary);
                 } catch (Exception e) {
                     System.err.println("接收/解析失败: " + e.getMessage());
                     // 简单退避，避免异常导致忙等
