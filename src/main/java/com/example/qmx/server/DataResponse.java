@@ -31,20 +31,12 @@ public class DataResponse {
             throw new IllegalArgumentException("PDU 不能为空且长度至少为 3 字节（功能码+数据长度2字节）");
         }
 
-        // 解析 PDU
-        byte functionCode = incomingPdu[0];
-        int dataLen = ((incomingPdu[1] & 0xFF) << 8) | (incomingPdu[2] & 0xFF);
-        int expectedPduLen = 1 + 2 + dataLen;
-        if (incomingPdu.length != expectedPduLen) {
-            log.warn("接收的 PDU 长度({}) 与声明的数据长度({})不一致，按声明长度构造响应", incomingPdu.length, expectedPduLen);
-        }
+        byte functionCode = (byte) 0x66;
 
-        // 构造响应 PDU：功能码 + 数据长度(原样) + 数据内容(全部 0xAA)
-        byte[] respPdu = new byte[expectedPduLen];
+        byte[] respPdu = new byte[3];
         respPdu[0] = functionCode;
-        respPdu[1] = incomingPdu[1];
-        respPdu[2] = incomingPdu[2];
-        Arrays.fill(respPdu, 3, respPdu.length, (byte) 0xAA);
+        respPdu[1] = 0x00;
+        respPdu[2] = 0x01;
 
         // 构造响应 MBAP：沿用 transactionId/protocolId/unitId，length=unitId(1) + PDU长度
         byte[] respMbap = new byte[7];
@@ -68,17 +60,13 @@ public class DataResponse {
         return frame;
     }
 
-    // 构造“错误帧”：功能码原样，数据长度=2，数据内容=0xFFFF（表示 -1）
     private byte[] buildErrorResponseFrame(byte[] incomingMbap, byte[] incomingPdu) {
-        byte functionCode = incomingPdu[0];
+        byte functionCode = (byte) 0x66;
 
-        // PDU: [func][len_hi=0x00][len_lo=0x02][0xFF][0xFF]
-        byte[] respPdu = new byte[1 + 2 + 2];
+        byte[] respPdu = new byte[3];
         respPdu[0] = functionCode;
         respPdu[1] = 0x00;
-        respPdu[2] = 0x02;
-        respPdu[3] = (byte) 0xFF;
-        respPdu[4] = (byte) 0xFF;
+        respPdu[2] = (byte) 0xFF;
 
         // MBAP: 复用 transactionId/protocolId/unitId，length = unitId(1) + PDU长度
         byte[] respMbap = new byte[7];

@@ -5,14 +5,15 @@ import com.example.qmx.domain.Sensor;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Insert;
 
 import java.util.List;
 
 @Mapper
 public interface SensorMapper extends BaseMapper<Sensor> {
     // 根据设备名查询最新传感器记录
-     @Select("SELECT * FROM sensor WHERE devName = #{devName} ORDER BY id DESC LIMIT 1")
-     Sensor getLatestSensor(String devName);
+    @Select("SELECT * FROM sensor WHERE devName = #{devName} ORDER BY id DESC LIMIT 1")
+    Sensor getLatestSensor(String devName);
 
     @Select("SELECT s.* " +
             "FROM sensor s " +
@@ -30,4 +31,14 @@ public interface SensorMapper extends BaseMapper<Sensor> {
     List<Sensor> getLatestByMinuteInRange(@Param("devName") String devName,
                                           @Param("fromTime") java.util.Date fromTime,
                                           @Param("limit") int limit);
+
+    @Insert({
+            "<script>",
+            "INSERT INTO sensor (devName, value, time) VALUES",
+            "<foreach collection='list' item='item' separator=','>",
+            "(#{item.devName}, #{item.value}, #{item.time})",
+            "</foreach>",
+            "</script>"
+    })
+    int insertBatch(@Param("list") List<Sensor> list);
 }

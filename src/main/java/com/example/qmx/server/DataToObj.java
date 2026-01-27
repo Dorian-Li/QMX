@@ -346,10 +346,10 @@ public class DataToObj {
                 "喷枪1", "喷枪2",
                 "喷涂机1", "喷涂机2", "喷涂管路1", "喷涂管路2",
                 "搅拌器1", "搅拌器2",
-                "进料门", "出料门",
-                // "机器人1", "机器人2"
+                "进料门", "出料门", "机器人1", "机器人2"
         };
-
+        Date now = new Date();
+        List<DeviceStatus> deviceStatusEntities = new ArrayList<>(deviceStatus.size());
         for (int idx = 0; idx < deviceStatus.size(); idx++) {
             int status = deviceStatus.get(idx).intValue();
             String devName = idx < statusDevNames.length ? statusDevNames[idx] : ("设备" + (idx + 1));
@@ -357,54 +357,53 @@ public class DataToObj {
             DeviceStatus ds = new DeviceStatus();
             ds.setDevName(devName);
             ds.setStatus(status);
-            ds.setTime(new Date());
-            int n = deviceStatusMapper.insert(ds);
-            if (n > 0) {
-                System.out.println("device_status 插入成功: " + devName + " status=" + status);
-            } else {
-                System.out.println("device_status 插入失败: " + devName);
-            }
+            ds.setTime(now);
+            deviceStatusEntities.add(ds);
+        }
+        if (!deviceStatusEntities.isEmpty()) {
+            int inserted = deviceStatusMapper.insertBatch(deviceStatusEntities);
+            System.out.println("device_status 批量插入: " + deviceStatusEntities.size() + " 条, 受影响行数=" + inserted);
         }
 
         // 0x02 传感器
         String[] sensorDevNames = new String[]{
                 "涂料桶1", "涂料桶2", "喷涂管路1", "喷涂管路2", "喷涂机1", "喷涂机2", "上料管路"
         };
+        List<Sensor> sensorEntities = new ArrayList<>(sensors.size());
         for (int idx = 0; idx < sensors.size(); idx++) {
             long rawBits = sensors.get(idx);
-            float f = Float.intBitsToFloat((int) rawBits); // 按 REAL32 还原
-            float value = f; // 与实体的 Float 类型兼容
+            float f = Float.intBitsToFloat((int) rawBits);
+            float value = f;
 
             String devName = idx < sensorDevNames.length ? sensorDevNames[idx] : ("传感器" + (idx + 1));
-        
+
             Sensor s = new Sensor();
             s.setDevName(devName);
             s.setValue(value);
-            s.setTime(new Date());
-            int n = sensorMapper.insert(s);
-            if (n > 0) {
-                System.out.println("sensor 插入成功: " + devName + " value=" + value);
-            } else {
-                System.out.println("sensor 插入失败: " + devName);
-            }
+            s.setTime(now);
+            sensorEntities.add(s);
+        }
+        if (!sensorEntities.isEmpty()) {
+            int inserted = sensorMapper.insertBatch(sensorEntities);
+            System.out.println("sensor 批量插入: " + sensorEntities.size() + " 条, 受影响行数=" + inserted);
         }
 
         // 0x03 喷涂情况
         String[] sprayDevNames = new String[]{
                 "机器人1进度", "机器人2进度", "相机"
         };
+        List<SprayRecord> sprayEntities = new ArrayList<>(paintRecord.size());
         for (int idx = 0; idx < paintRecord.size(); idx++) {
             double rate = paintRecord.get(idx);
             SprayRecord sr = new SprayRecord();
             sr.setDevName(sprayDevNames[idx]);
             sr.setRate(rate);
-            sr.setTime(new Date());
-            int n = sprayRecordMapper.insert(sr);
-            if (n > 0) {
-                System.out.println("spray_record 插入成功: rate=" + rate);
-            } else {
-                System.out.println("spray_record 插入失败: rate=" + rate);
-            }
+            sr.setTime(now);
+            sprayEntities.add(sr);
+        }
+        if (!sprayEntities.isEmpty()) {
+            int inserted = sprayRecordMapper.insertBatch(sprayEntities);
+            System.out.println("spray_record 批量插入: " + sprayEntities.size() + " 条, 受影响行数=" + inserted);
         }
 
         if (production.size() >= 24) {
@@ -452,7 +451,7 @@ public class DataToObj {
                     "pressure10", "pressure11",
                     "freq12", "freq13"
             };
-            Date now = new Date();
+            List<ControlParameter> controlEntities = new ArrayList<>();
             for (int idx = 0; idx < names.length && idx < controlParams.size(); idx++) {
                 String name = names[idx];
                 double val;
@@ -467,10 +466,13 @@ public class DataToObj {
                 cp.setName(name);
                 cp.setValue(val);
                 cp.setTime(now);
-                controlParameterMapper.insert(cp);
+                controlEntities.add(cp);
             }
-    }        
-        
+            if (!controlEntities.isEmpty()) {
+                int inserted = controlParameterMapper.insertBatch(controlEntities);
+                System.out.println("control_param 批量插入: " + controlEntities.size() + " 条, 受影响行数=" + inserted);
+            }
+        }
     }
 
 

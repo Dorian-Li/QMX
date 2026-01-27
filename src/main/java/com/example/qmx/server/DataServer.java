@@ -1,9 +1,7 @@
 package com.example.qmx.server;
 
-import com.example.qmx.config.RabbitConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -18,7 +16,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 import com.serotonin.modbus4j.ModbusFactory;
 import com.serotonin.modbus4j.ModbusMaster;
@@ -52,9 +49,6 @@ public class DataServer {
 
     @Autowired
     private DataToObj dataToObj;
-
-    @Autowired
-    private RabbitTemplate rabbitTemplate;
 
     // 固定事务ID
     private static final int FIXED_TX_ID = 0x0001;
@@ -125,23 +119,20 @@ public class DataServer {
             long tAfterRead = System.currentTimeMillis();
             logger.info("E2E[接收点] txId={}, netCostMs={}", transactionId, (tAfterRead - tFetchStart));
 
-            byte[] body = buildMessageBody(mbap, pdu);
-            long receivedAt = tAfterRead;
-            String messageId = UUID.randomUUID().toString();
+            try {
+                dataResponse.sendResponse(gatewaySocket, mbap, pdu);
+                logger.info("已向网关发送ACK响应帧，txId={}", transactionId);
+            } catch (IOException ackEx) {
+                logger.error("向网关发送ACK响应帧失败, txId={}, err={}", transactionId, ackEx.toString());
+            }
 
-            rabbitTemplate.convertAndSend(RabbitConfig.MODBUS_EXCHANGE, RabbitConfig.MODBUS_ROUTING_KEY, body, message -> {
-                message.getMessageProperties().setMessageId(messageId);
-                message.getMessageProperties().setHeader("txId", transactionId);
-                message.getMessageProperties().setHeader("unitId", unitId & 0xFF);
-                message.getMessageProperties().setHeader("protocolId", protocolId);
-                message.getMessageProperties().setHeader("receivedAt", receivedAt);
-                return message;
-            });
+            String summary = dataToObj.handleModbusFrame(mbap, pdu);
 
-            long tAfterEnqueue = System.currentTimeMillis();
-            logger.info("E2E[入队成功] txId={}, enqueueCostMs={}", transactionId, (tAfterEnqueue - tAfterRead));
+            long tAfterHandle = System.currentTimeMillis();
+            logger.info("E2E[处理完成] txId={}, handleCostMs={}, totalCostMs={}",
+                    transactionId, (tAfterHandle - tAfterRead), (tAfterHandle - tFetchStart));
 
-            return "{\"transactionId\":" + transactionId + ",\"enqueued\":true}";
+            return summary;
         } catch (Exception e) {
             logger.error("服务端接收或解析数据失败: {}", e.toString());
             closeGatewaySocket();
@@ -189,25 +180,11 @@ public class DataServer {
         while (off < len) {
             int r = in.read(buf, off, len - off);
             if (r < 0) {
-                return null; // 流结束
+                return null;
             }
             off += r;
         }
         return buf;
-    }
-
-    private byte[] buildMessageBody(byte[] mbap, byte[] pdu) {
-        int mbapLen = mbap != null ? mbap.length : 0;
-        int pduLen = pdu != null ? pdu.length : 0;
-        byte[] body = new byte[1 + mbapLen + pduLen];
-        body[0] = (byte) mbapLen;
-        if (mbapLen > 0) {
-            System.arraycopy(mbap, 0, body, 1, mbapLen);
-        }
-        if (pduLen > 0) {
-            System.arraycopy(pdu, 0, body, 1 + mbapLen, pduLen);
-        }
-        return body;
     }
 
     // 一次性发送
