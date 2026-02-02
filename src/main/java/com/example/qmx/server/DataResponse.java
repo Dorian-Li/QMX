@@ -325,12 +325,12 @@ public class DataResponse {
                 throw new IllegalArgumentException("具体数据不能为空");
             }
             int expectedLen;
-            if (dataId >= 0x01 && dataId <= 0x05) {
+            if (dataId >= 0x01 && dataId <= 0x03) {
                 expectedLen = 1;
-            } else if (dataId == 0x06) {
+            } else if (dataId == 0x04) {
                 expectedLen = 2;
             } else {
-                expectedLen = 4; // 0x07..0x13
+                expectedLen = 4; // 0x05..0x13
             }
             if (value.length != expectedLen) {
                 throw new IllegalArgumentException("数据标识 0x" + Integer.toHexString(dataId) +
@@ -341,8 +341,8 @@ public class DataResponse {
         }
 
         public static ConfigItem ofChar(int dataId, int byteValue) {
-            if (dataId < 0x01 || dataId > 0x05) {
-                throw new IllegalArgumentException("char(单字节) 的数据标识必须在 0x01-0x05 范围内");
+            if (dataId < 0x01 || dataId > 0x03) {
+                throw new IllegalArgumentException("char(单字节) 的数据标识必须在 0x01-0x03 范围内");
             }
             if (byteValue < 0x00 || byteValue > 0xFF) {
                 throw new IllegalArgumentException("char(单字节) 的取值必须在 0x00-0xFF 范围内");
@@ -352,8 +352,8 @@ public class DataResponse {
         }
 
         public static ConfigItem ofInt(int dataId, int v) {
-            if (dataId != 0x06) {
-                throw new IllegalArgumentException("int16 的数据标识必须为 0x06");
+            if (dataId != 0x04) {
+                throw new IllegalArgumentException("int16 的数据标识必须为 0x04");
             }
             byte[] payload = new byte[2];
             payload[0] = (byte) ((v >> 8) & 0xFF);
@@ -362,8 +362,8 @@ public class DataResponse {
         }
 
         public static ConfigItem ofReal(int dataId, double d) {
-            if (dataId < 0x07 || dataId > 0x13) {
-                throw new IllegalArgumentException("real32 的数据标识必须在 0x07-0x13 范围内");
+            if (dataId < 0x05 || dataId > 0x13) {
+                throw new IllegalArgumentException("real32 的数据标识必须在 0x05-0x13 范围内");
             }
             int bits = Float.floatToIntBits((float) d);
             byte[] payload = new byte[4];

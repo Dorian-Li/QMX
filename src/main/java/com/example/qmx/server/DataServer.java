@@ -60,6 +60,9 @@ public class DataServer {
     @Value("${modbus.server.initial-timeout-ms:30000}")
     private int initialTimeoutMs;
 
+    @Value("${modbus.server.socket-read-timeout-ms:10000}")
+    private int socketReadTimeoutMs;
+
     // 保存与网关的当前连接（最近一次接入）
     private volatile Socket gatewaySocket;
     private volatile OutputStream gatewayOut;
@@ -89,6 +92,7 @@ public class DataServer {
                 Socket socket = serverSocket.accept();
                 this.gatewaySocket = socket;
                 try { socket.setKeepAlive(true); } catch (Exception ignore) {}
+                try { socket.setSoTimeout(socketReadTimeoutMs); } catch (Exception ignore) {}
                 this.gatewayOut = socket.getOutputStream();
                 String remote = socket.getInetAddress().getHostAddress() + ":" + socket.getPort();
                 logger.info("与网关连接成功: {}", remote);
@@ -119,6 +123,13 @@ public class DataServer {
             long tAfterRead = System.currentTimeMillis();
             logger.info("E2E[接收点] txId={}, netCostMs={}", transactionId, (tAfterRead - tFetchStart));
 
+            // 校验功能码是否为采集功能码 0x03（网关返回参数下发确认帧时用，目前未使用）
+            // int functionCode = pdu[0] & 0xFF;
+            // if (functionCode != 0x03) {
+            //     logger.info("收到非采集功能码帧, txId={}, functionCode={}", transactionId, functionCode);
+            //     return "{\"transactionId\":" + transactionId + ",\"functionCode\":" + functionCode + "}";
+            // }
+
             try {
                 dataResponse.sendResponse(gatewaySocket, mbap, pdu);
                 logger.info("已向网关发送ACK响应帧，txId={}", transactionId);
@@ -136,6 +147,7 @@ public class DataServer {
         } catch (Exception e) {
             logger.error("服务端接收或解析数据失败: {}", e.toString());
             closeGatewaySocket();
+            closeServerSocket();
             throw new RuntimeException("failed to receive/parse modbus tcp frame: " + e.getMessage(), e);
         }
     }
@@ -149,6 +161,16 @@ public class DataServer {
         }
         gatewaySocket = null;
         gatewayOut = null;
+    }
+
+    private synchronized void closeServerSocket() {
+        if (serverSocket != null) {
+            try {
+                serverSocket.close();
+            } catch (IOException ignore) {
+            }
+        }
+        serverSocket = null;
     }
 
     /**

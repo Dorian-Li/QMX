@@ -6,7 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
-import java.util.Date;
+import java.time.LocalDateTime;
 
 @Data
 @TableName(value = "product_daily")
@@ -19,5 +19,5 @@ public class ProductDaily {
     private Integer numDaily;
 
     @TableField("time")
-    private Date time;
+    private LocalDateTime time;
 }

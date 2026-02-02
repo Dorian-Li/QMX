@@ -1,9 +1,13 @@
 package com.example.qmx.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.qmx.common.PageR;
 import com.example.qmx.domain.*;
+import com.example.qmx.dto.*;
 import com.example.qmx.mapper.*;
 import com.example.qmx.server.*;
+import com.example.qmx.service.*;
+import com.example.qmx.vo.*;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +19,8 @@ import java.util.Map;
 
 import org.springframework.http.MediaType;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import javax.annotation.Resource;
 import java.io.IOException;
 import java.util.HashMap;
 
@@ -41,6 +47,26 @@ public class MainController {
     private QualityDetectionMapper qualityDetectionMapper;
     @Autowired
     private ControlParameterMapper controlParameterMapper;
+    @Resource
+    private ControlParameterService controlParameterService;
+
+    @Resource
+    private DeviceStatusService deviceStatusService;
+
+    @Resource
+    private ProductDailyService productDailyService;
+
+    @Resource
+    private ProductHourlyService productHourlyService;
+
+    @Resource
+    private QualityDetectionService qualityDetectionService;
+
+    @Resource
+    private SensorService sensorService;
+
+    @Resource
+    private SprayRecordService sprayRecordService;
 
     @Value("${config.auth.username:}")
     private String configAuthUsername;
@@ -52,6 +78,93 @@ public class MainController {
         this.dataServer = dataServer;
         this.dataToObj = dataToObj;
     }
+
+
+
+    @PostMapping("/controlParameter")
+    @ApiOperation(value = "控制参数报表导出", notes = "根据参数名称列表和时间范围导出控制参数数据")
+    public List<ControlParameterVO> exportControlParameter(@RequestBody ControlParameterSheetReq req) {
+        return controlParameterService.getDataSheet(req);
+    }
+
+    @PostMapping("/controlParameter/page")
+    @ApiOperation(value = "控制参数分页查询", notes = "分页查询控制参数数据")
+    public PageR<List<ControlParameterVO>> pageSelectControlParameter(@RequestBody CommonPageReq req) {
+        return controlParameterService.pageSelect(req);
+    }
+
+    @PostMapping("/deviceStatus")
+    @ApiOperation(value = "设备状态报表导出", notes = "根据设备名称列表和时间范围导出设备状态数据")
+    public List<DeviceStatusVO> exportDeviceStatus(@RequestBody DeviceStatusSheetReq req) {
+        return deviceStatusService.getDataSheet(req);
+    }
+
+    @PostMapping("/deviceStatus/page")
+    @ApiOperation(value = "设备状态分页查询", notes = "分页查询设备状态数据")
+    public PageR<List<DeviceStatusVO>> pageSelectDeviceStatus(@RequestBody CommonPageReq req) {
+        return deviceStatusService.pageSelect(req);
+    }
+
+    @PostMapping("/productDaily")
+    @ApiOperation(value = "产品日产量报表导出", notes = "根据时间范围导出产品日产量数据")
+    public List<ProductDailyVO> exportProductDaily(@RequestBody ProductDailySheetReq req) {
+        return productDailyService.getDataSheet(req);
+    }
+
+    @PostMapping("/productDaily/page")
+    @ApiOperation(value = "产品日产量分页查询", notes = "分页查询产品日产量数据")
+    public PageR<List<ProductDailyVO>> pageSelectProductDaily(@RequestBody CommonPageReq req) {
+        return productDailyService.pageSelect(req);
+    }
+
+    @PostMapping("/productHourly")
+    @ApiOperation(value = "产品小时产量报表导出", notes = "根据时间范围导出产品小时产量数据")
+    public List<ProductHourlyVO> exportProductHourly(@RequestBody ProductHourlySheetReq req) {
+        return productHourlyService.getDataSheet(req);
+    }
+
+    @PostMapping("/productHourly/page")
+    @ApiOperation(value = "产品小时产量分页查询", notes = "分页查询产品小时产量数据")
+    public PageR<List<ProductHourlyVO>> pageSelectProductHourly(@RequestBody CommonPageReq req) {
+        return productHourlyService.pageSelect(req);
+    }
+
+    @PostMapping("/qualityDetection")
+    @ApiOperation(value = "质量检测报表导出", notes = "根据时间范围导出质量检测数据")
+    public List<QualityDetectionVO> exportQualityDetection(@RequestBody QualityDetectionSheetReq req) {
+        return qualityDetectionService.getDataSheet(req);
+    }
+
+    @PostMapping("/qualityDetection/page")
+    @ApiOperation(value = "质量检测分页查询", notes = "分页查询质量检测数据")
+    public PageR<List<QualityDetectionVO>> pageSelectQualityDetection(@RequestBody CommonPageReq req) {
+        return qualityDetectionService.pageSelect(req);
+    }
+
+    @PostMapping("/sensor")
+    @ApiOperation(value = "传感器数据报表导出", notes = "根据设备名称列表和时间范围导出传感器数据")
+    public List<SensorVO> exportSensor(@RequestBody SensorSheetReq req) {
+        return sensorService.getDataSheet(req);
+    }
+
+    @PostMapping("/sensor/page")
+    @ApiOperation(value = "传感器数据分页查询", notes = "分页查询传感器数据")
+    public PageR<List<SensorVO>> pageSelectSensor(@RequestBody CommonPageReq req) {
+        return sensorService.pageSelect(req);
+    }
+
+    @PostMapping("/sprayRecord")
+    @ApiOperation(value = "喷洒记录报表导出", notes = "根据设备名称列表和时间范围导出喷洒记录数据")
+    public List<SprayRecordVO> exportSprayRecord(@RequestBody SprayRecordSheetReq req) {
+        return sprayRecordService.getDataSheet(req);
+    }
+
+    @PostMapping("/sprayRecord/page")
+    @ApiOperation(value = "喷洒记录分页查询", notes = "分页查询喷洒记录数据")
+    public PageR<List<SprayRecordVO>> pageSelectSprayRecord(@RequestBody CommonPageReq req) {
+        return sprayRecordService.pageSelect(req);
+    }
+
 
     @GetMapping(value = "/getAlarmStream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @ApiOperation(value = "获取报警", notes = "返回实时报警")
@@ -231,8 +344,8 @@ public class MainController {
         java.util.Date fromTime = new java.util.Date(nowMillis - 15L * 60L * 1000L);
 
         int limit = 15;
-        List<Sensor> gun1 = sensorMapper.getLatestByMinuteInRange("喷涂管路1", fromTime, limit);
-        List<Sensor> gun2 = sensorMapper.getLatestByMinuteInRange("喷涂管路2", fromTime, limit);
+        List<Sensor> gun1 = sensorMapper.getLatestByMinuteInRange("喷涂管路1压力", fromTime, limit);
+        List<Sensor> gun2 = sensorMapper.getLatestByMinuteInRange("喷涂管路2压力", fromTime, limit);
 
         Map<String, Object> result = new HashMap<>();
         result.put("gun1", gun1);
@@ -402,27 +515,27 @@ public class MainController {
                      ControlParameter cp = new ControlParameter();
                      cp.setName(name);
                      double val;
-                     if (dataId >= 0x01 && dataId <= 0x05) {
-                         int iv = v == null ? 0 : Integer.parseInt(String.valueOf(v));
-                         val = iv;
-                     } else if (dataId == 0x06) {
-                         int iv = v == null ? 0 : Integer.parseInt(String.valueOf(v));
-                         val = iv;
-                     } else {
+                if (dataId >= 0x01 && dataId <= 0x05) {
+                    int iv = v == null ? 0 : Integer.parseInt(String.valueOf(v));
+                    val = iv;
+                    } else if (dataId == 0x04) {
+                        int iv = v == null ? 0 : Integer.parseInt(String.valueOf(v));
+                        val = iv;
+                    } else {
                          double dv = v == null ? 0.0 : Double.parseDouble(String.valueOf(v));
                          val = dv;
                      }
                      cp.setValue(val);
-                     cp.setTime(new java.util.Date());
+                     cp.setTime(java.time.LocalDateTime.now());
                      snapshots.add(cp);
                  }
-                if (dataId >= 0x01 && dataId <= 0x05) {
+                if (dataId >= 0x01 && dataId <= 0x03) {
                     int iv = v == null ? 0 : Integer.parseInt(String.valueOf(v));
                     items.add(com.example.qmx.server.DataResponse.ConfigItem.ofChar(dataId, iv));
-                } else if (dataId == 0x06) {
+                } else if (dataId == 0x04) {
                     int iv = v == null ? 0 : Integer.parseInt(String.valueOf(v));
                     items.add(com.example.qmx.server.DataResponse.ConfigItem.ofInt(dataId, iv));
-                } else if (dataId >= 0x07 && dataId <= 0x13) {
+                } else if (dataId >= 0x05 && dataId <= 0x13) {
                     double dv = v == null ? 0.0 : Double.parseDouble(String.valueOf(v));
                     items.add(com.example.qmx.server.DataResponse.ConfigItem.ofReal(dataId, dv));
                 } else {
@@ -451,31 +564,31 @@ public class MainController {
     private String mapDataIdToName(int dataId) {
         switch (dataId) {
             case 0x01:
-                return "mode01";
+                return "人工一键清洗";
             case 0x02:
-                return "mode02";
+                return "枪头清洗控制";
             case 0x03:
-                return "mode03";
+                return "供料桶切换";
             case 0x04:
-                return "mode04";
+                return "现场运行控制";
             case 0x05:
-                return "mode05";
+                return "机器人喷涂速度";
             case 0x06:
-                return "mode06";
+                return "定时清洗间隔";
             case 0x07:
-                return "speed07";
+                return "喷涂管路1压力报警阈值";
             case 0x08:
-                return "mode08";
+                return "喷涂管路2压力报警阈值";
             case 0x09:
-                return "time09";
+                return "清洗泵压力报警阈值";
             case 0x0A:
-                return "pressure10";
+                return "搅拌器1转速";
             case 0x0B:
-                return "pressure11";
+                return "搅拌器2转速";
             case 0x0C:
-                return "freq12";
+                return "液位传感器1报警阈值";
             case 0x0D:
-                return "freq13";
+                return "液位传感器2报警阈值";
             default:
                 return null;
         }
@@ -487,19 +600,19 @@ public class MainController {
         java.util.Map<String, Object> resp = new java.util.HashMap<>();
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         String[] keys = new String[]{
-                "mode01",
-                "mode02",
-                "mode03",
-                "mode04",
-                "mode05",
-                "mode06",
-                "mode08",
-                "speed07",
-                "time09",
-                "pressure10",
-                "pressure11",
-                "freq12",
-                "freq13"
+                "人工一键清洗",
+                "枪头清洗控制",
+                "供料桶切换",
+                "现场运行控制",
+                "机器人喷涂速度",
+                "定时清洗间隔",
+                "喷涂管路1压力报警阈值",
+                "喷涂管路2压力报警阈值",
+                "清洗泵压力报警阈值",
+                "搅拌器1转速",
+                "搅拌器2转速",
+                "液位传感器1报警阈值",
+                "液位传感器2报警阈值"
         };
         for (String key : keys) {
             ControlParameter latest = controlParameterMapper.selectLatestByName(key);
