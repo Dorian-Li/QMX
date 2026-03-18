@@ -73,12 +73,14 @@ public class DataToObj {
     // 报警设备名称
     private static final List<String> ALARM_DEVICE_NAMES = Arrays.asList(
             "停止器1", "停止器2",
-            "锁定结构1", "锁定机构2",
+            "锁定机构1", "锁定机构2",
             "机器人1地轨", "机器人2地轨",
             "机器人1", "机器人2",
             "喷涂机1", "喷涂机2",
-            "压力传感器1", "压力传感器2", "压力传感器3", "压力传感器4", "压力传感器5",
-            "搅拌器1", "搅拌器2"
+            "涂料桶1进气压力", "涂料桶2进气压力", "清洗桶进气压力", "进气源压力", "备用",
+            "搅拌器1故障", "搅拌器2故障", "房间环境异常报警",
+            "禁止进入提示"
+            // "涂料桶1是否可用", "涂料桶2是否可用"
     );
 
     public SseEmitter registerAlarmEmitter() {
@@ -276,14 +278,14 @@ public class DataToObj {
                     }
                     break;
                 }
-                case 0x05: { // 控制参数（固定13个字段，按顺序：5个char，1个int16，7个float32）
-                    int expectedCount = 13;
-                    int need = 5 * 1 + 1 * 2 + 7 * 4;
+                case 0x05: { // 控制参数（固定14个字段，按顺序：3个char，1个int16，10个float32）
+                    int expectedCount = 14;
+                    int need = 3 * 1 + 1 * 2 + 10 * 4;
                     if (count != expectedCount || offset + need > end) {
                         offset = end;
                         break;
                     }
-                    for (int i = 0; i < 5; i++) {
+                    for (int i = 0; i < 3; i++) {
                         int v = pdu[offset] & 0xFF;
                         values.add((long) v);
                         offset += 1;
@@ -294,7 +296,7 @@ public class DataToObj {
                     }
                     values.add((long) iv);
                     offset += 2;
-                    for (int i = 0; i < 7; i++) {
+                    for (int i = 0; i < 10; i++) {
                         int bits = ((pdu[offset] & 0xFF) << 24)
                                  | ((pdu[offset + 1] & 0xFF) << 16)
                                  | ((pdu[offset + 2] & 0xFF) << 8)
@@ -333,7 +335,7 @@ public class DataToObj {
         return out;
     }
 
-
+    // 0x01 设备状态
     private void routeToDb(Map<Integer, List<Long>> decoded) {
         List<Long> deviceStatus = decoded.getOrDefault(0x01, Collections.emptyList());
         List<Long> sensors      = decoded.getOrDefault(0x02, Collections.emptyList());
@@ -342,11 +344,12 @@ public class DataToObj {
         List<Long> controlParams = decoded.getOrDefault(0x05, Collections.emptyList());
 
         String[] statusDevNames = new String[]{
-                "停止器1", "停止器2", "锁定机构1", "锁定机构2",
-                "喷枪1", "喷枪2",
-                "喷涂机1", "喷涂机2", "喷涂管路1", "喷涂管路2",
-                "搅拌器1", "搅拌器2",
-                "进料门", "出料门", "机器人1", "机器人2"
+                "停止器1", "停止器2", "锁定机构1", "锁定机构2", "喷枪1", "喷枪2", 
+                "喷涂管路1压力", "喷涂管路2压力", "清洗泵压力", "进气源压力",
+                "搅拌器1", "搅拌器2", "现场运行模式",
+                // "备用",
+                "进料门", "出料门", "现场运行状态",  "机器人1", "机器人2",
+                "涂料桶1是否可用", "涂料桶2是否可用"
         };
         Date now = new Date();
         List<DeviceStatus> deviceStatusEntities = new ArrayList<>(deviceStatus.size());
@@ -367,7 +370,7 @@ public class DataToObj {
 
         // 0x02 传感器
         String[] sensorDevNames = new String[]{
-                "涂料桶1", "涂料桶2", "喷涂管路1", "喷涂管路2", "喷涂机1", "喷涂机2", "上料管路"
+                "涂料桶1液位", "涂料桶2液位", "喷涂管路1压力", "喷涂管路2压力", "清洗泵压力", "进气源压力"
         };
         List<Sensor> sensorEntities = new ArrayList<>(sensors.size());
         for (int idx = 0; idx < sensors.size(); idx++) {
@@ -445,18 +448,17 @@ public class DataToObj {
         // 0x05控制参数
         if (!controlParams.isEmpty()) {
             String[] names = new String[]{
-                    "mode01", "mode02", "mode03", "mode04", "mode05",
-                    "mode06",
-                    "speed07", "mode08", "time09",
-                    "pressure10", "pressure11",
-                    "freq12", "freq13"
+                "人工一键清洗", "枪头清洗控制", "供料桶切换",
+                "现场运行控制", "机器人喷涂速度", "定时清洗间隔",
+                "喷涂管路1压力报警阈值", "喷涂管路2压力报警阈值", "清洗泵压力报警阈值",
+                "搅拌器1转速", "搅拌器2转速", "液位传感器1报警阈值", "液位传感器2报警阈值"
             };
             List<ControlParameter> controlEntities = new ArrayList<>();
             for (int idx = 0; idx < names.length && idx < controlParams.size(); idx++) {
                 String name = names[idx];
                 double val;
                 long raw = controlParams.get(idx);
-                if (idx <= 5) {
+                if (idx <= 3) {
                     val = (double) raw;
                 } else {
                     float f = Float.intBitsToFloat((int) raw);
