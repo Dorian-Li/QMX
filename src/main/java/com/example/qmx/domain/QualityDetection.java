@@ -6,7 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
-import java.util.Date;
+import java.time.LocalDateTime;
 
 @Data
 @TableName("quality_result")
@@ -18,6 +18,6 @@ public class QualityDetection {
     private Integer result;
 
     @TableField("time")
-    private Date time;
+    private LocalDateTime time;
 
 }

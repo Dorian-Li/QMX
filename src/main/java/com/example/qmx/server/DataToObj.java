@@ -351,7 +351,7 @@ public class DataToObj {
                 "进料门", "出料门", "现场运行状态",  "机器人1", "机器人2",
                 "涂料桶1是否可用", "涂料桶2是否可用"
         };
-        Date now = new Date();
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
         List<DeviceStatus> deviceStatusEntities = new ArrayList<>(deviceStatus.size());
         for (int idx = 0; idx < deviceStatus.size(); idx++) {
             int status = deviceStatus.get(idx).intValue();
@@ -417,7 +417,7 @@ public class DataToObj {
             if (numHourly != 0) {
                 ProductHourly ph = new ProductHourly();
                 ph.setNumHourly(numHourly);
-                ph.setTime(new Date());
+                ph.setTime(nowTime);
                 int n = productHourlyMapper.insert(ph);
                 if (n > 0) {
                     System.out.println("product_hourly 插入成功: index=" + hourlyIndex + " numHourly=" + numHourly);
@@ -434,7 +434,7 @@ public class DataToObj {
                 if (numDaily != 0) {
                     ProductDaily pw = new ProductDaily();
                     pw.setNumDaily(numDaily);
-                    pw.setTime(new Date());
+                    pw.setTime(nowTime);
                     int n = productDailyMapper.insert(pw);
                     if (n > 0) {
                         System.out.println("product_daily 插入成功(日产量): index=" + dailyIndex + " numDaily=" + numDaily);

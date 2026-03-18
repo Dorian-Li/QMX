@@ -6,7 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
-import java.util.Date;
+import java.time.LocalDateTime;
 
 @Data
 @TableName(value = "spray_record")
@@ -25,5 +25,5 @@ public class SprayRecord {
     private Double rate;
 
     @TableField("time")
-    private Date time;
+    private LocalDateTime time;
 }

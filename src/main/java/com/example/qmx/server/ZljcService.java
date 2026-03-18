@@ -14,7 +14,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.nio.charset.StandardCharsets;
-import java.util.Date;
+import java.time.LocalDateTime;
 
 @Service
 public class ZljcService {
@@ -77,7 +77,7 @@ public class ZljcService {
 
             QualityDetection qd = new QualityDetection();
             qd.setResult(result);
-            qd.setTime(new Date());
+            qd.setTime(LocalDateTime.now());
 
             int n = qualityDetectionMapper.insert(qd);
             if (n > 0) {

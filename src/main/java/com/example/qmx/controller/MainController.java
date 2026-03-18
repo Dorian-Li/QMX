@@ -526,7 +526,7 @@ public class MainController {
                          val = dv;
                      }
                      cp.setValue(val);
-                     cp.setTime(new java.util.Date());
+                     cp.setTime(java.time.LocalDateTime.now());
                      snapshots.add(cp);
                  }
                 if (dataId >= 0x01 && dataId <= 0x03) {
